@@ -26,7 +26,7 @@ Mode lastMode;
 volatile unsigned long buttonPressTime = 0;
 volatile bool isButtonPressed = false;
 unsigned long configStartTime = 0;
-int interval = 30;
+int logInterval = 30;
 unsigned long lastGetTime = 0;
 void changeMode(Mode newMode);
 void buttonPressed();
@@ -79,10 +79,10 @@ void setup() {
 
 void loop() {
   
-  if (millis() - lastRecordTime >= 5000) {  // 80 minutes : 4800000
+  if (millis() - lastRecordTime >= 4800000) {  // 80 minutes : 4800000
     saveDataToSD();
   }
-  if(millis() - lastGetTime >= interval * 1000){
+  if(millis() - lastGetTime >= logInterval * 60000){
       readAndPrintSensors();
   }
 
@@ -139,16 +139,19 @@ void readAndPrintSensors() {
     lastGetTime = millis();
 }
 void ecoMode(){
-
+  logInterval = 5;
 }
 void standardMode(){
-
+  logInterval = 30;
 }
 void configMode(){
-
+  logInterval = 10;
+  //Formatter disque dur ?
+  //Reinitialiser paramètres
+  //Interface pour taper des commandes
+  
 }
 void maintenanceMode(){
-  
 }
 
 void buttonPressed() {
