@@ -26,7 +26,8 @@ Mode lastMode;
 volatile unsigned long buttonPressTime = 0;
 volatile bool isButtonPressed = false;
 unsigned long configStartTime = 0;
-
+int interval = 30;
+unsigned long lastGetTime = 0;
 void changeMode(Mode newMode);
 void buttonPressed();
 void checkButton();
@@ -81,7 +82,10 @@ void loop() {
   if (millis() - lastRecordTime >= 5000) {  // 80 minutes : 4800000
     saveDataToSD();
   }
-  readAndPrintSensors();
+  if(millis() - lastGetTime >= interval * 1000){
+      readAndPrintSensors();
+  }
+
   switch(currentMode){
     case CONFIG :
       configMode();
@@ -96,7 +100,6 @@ void loop() {
       maintenanceMode();
       break;
   }
-  delay(5000);
 }
 void saveDataToSD() {
     int day, month, year;
@@ -121,7 +124,6 @@ void saveDataToSD() {
     }
 }
 
-
 void readAndPrintSensors() {
     float temperature = bme280.getTemperature();
     float humidity = bme280.getHumidity();
@@ -134,6 +136,7 @@ void readAndPrintSensors() {
     float voltage = lightLevel * (5.0 / 1023.0);
     Serial.print("Lecture brute : "); Serial.print(lightLevel);
     Serial.print("\tTension : "); Serial.println(voltage);
+    lastGetTime = millis();
 }
 void ecoMode(){
 
