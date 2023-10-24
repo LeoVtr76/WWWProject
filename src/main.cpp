@@ -5,12 +5,34 @@
 #include <Wire.h>
 #include <SdFat.h>
 #include <SPI.h>
+#include <EEPROM.h>
 
 #define NUM_LEDS 1
 #define RED_BUTTON 2
 #define GREEN_BUTTON 3
 #define LIGHT_SENSOR_PIN A0
 #define BUTTON_CHECK_INTERVAL 100000  // 100ms in microseconds
+
+
+//EEPROM 
+#define ADDR_LOG_INTERVAL 0
+#define ADDR_FILE_MAX_SIZE 4 
+#define ADDR_TIMEOUT 8
+#define ADDR_LUMIN 12
+#define ADDR_LUMIN_LOW 14
+#define ADDR_LUMIN_HIGH 16
+#define ADDR_TEMP_AIR 18
+#define ADDR_MIN_TEMP_AIR 20
+#define ADDR_MAX_TEMP_AIR 22
+#define ADDR_HYGR 24
+#define ADDR_HYGR_MINT 26
+#define ADDR_HYGR_MAXT 28
+#define ADDR_PRESSURE 30
+#define ADDR_PRESSURE_MIN 32
+#define ADDR_PRESSURE_MAX 34
+#define ADDR_LOG_INTERVAL_VALUE 36
+#define ADDR_FILE_MAX_SIZE_VALUE 40
+#define ADDR_TIMEOUT_VALUE 44
 
 ChainableLED leds(5, 6, NUM_LEDS);
 BME280 bme280;
@@ -37,9 +59,31 @@ void maintenanceMode();
 void flashLedError(int red, int green, int blue, int duration1, int duration2);
 void checkError();
 void printDateTime();
+void handleSerialCommand(String command);
+void resetToDefaults();
+void writeEEPROMint(int address, int value);
+int readEEPROMint(int address);
 
 void setup() {
   Serial.begin(9600);
+  if (EEPROM.read(ADDR_LOG_INTERVAL) == 0xFF) { 
+    writeEEPROMint(ADDR_LUMIN, 1);
+    writeEEPROMint(ADDR_LUMIN_LOW, 255);
+    writeEEPROMint(ADDR_LUMIN_HIGH, 768);
+    writeEEPROMint(ADDR_TEMP_AIR, 1);
+    writeEEPROMint(ADDR_MIN_TEMP_AIR, -10);
+    writeEEPROMint(ADDR_MAX_TEMP_AIR, 60);
+    writeEEPROMint(ADDR_HYGR, 1);
+    writeEEPROMint(ADDR_HYGR_MINT, 0);
+    writeEEPROMint(ADDR_HYGR_MAXT, 50);
+    writeEEPROMint(ADDR_PRESSURE, 1);
+    writeEEPROMint(ADDR_PRESSURE_MIN, 850);
+    writeEEPROMint(ADDR_PRESSURE_MAX, 1080);
+    writeEEPROMint(ADDR_LOG_INTERVAL_VALUE, 10);
+    writeEEPROMint(ADDR_FILE_MAX_SIZE_VALUE, 4096);
+    writeEEPROMint(ADDR_TIMEOUT_VALUE, 30);
+  }
+
   pinMode(RED_BUTTON, INPUT_PULLUP);
   pinMode(GREEN_BUTTON, INPUT_PULLUP);
   leds.setColorRGB(0, 0, 0, 0);
@@ -56,7 +100,6 @@ void setup() {
 }
 
 void loop() {
-  readAndPrintSensors();
   checkError();
   if (millis() - lastRecordTime >= 4800000) saveDataToSD();  // 80 minutes : 4800000
     
@@ -69,6 +112,16 @@ void loop() {
     case MAINTENANCE : maintenanceMode(); break;
   }
 }
+void writeEEPROMint(int address, int value) {
+    EEPROM.put(address, value);
+}
+
+int readEEPROMint(int address) {
+    int value;
+    EEPROM.get(address, value);
+    return value;
+}
+
 void checkError(){
   bool errorFlag = false;
   if(!bme280.init()){
@@ -170,7 +223,10 @@ void standardMode(){
   //Pas compris la 3e instruction
 }
 void configMode(){
-  logInterval = 10;
+  if (Serial.available()) {
+        String command = Serial.readStringUntil('\n');
+        handleSerialCommand(command);
+    }
   //Modifier parametres EEPROM ?
   //Formatter disque dur ? en 4k TUA
   //Reinitialiser paramètres
@@ -178,6 +234,40 @@ void configMode(){
   //Affiche version + numéro de lot
 
 }
+void handleSerialCommand(String command) {
+    if (command.startsWith("LOG_INTERVALL=")) {
+        logInterval = command.substring(13).toInt();
+        writeEEPROMint(ADDR_LOG_INTERVAL_VALUE, logInterval);
+        Serial.println("LOG_INTERVALL set to " + String(logInterval));
+    }
+    else if (command.startsWith("FILE_MAX_SIZE=")) {
+        int fileSize = command.substring(13).toInt();
+        writeEEPROMint(ADDR_FILE_MAX_SIZE_VALUE, fileSize);
+        Serial.println("FILE_MAX_SIZE set to " + String(fileSize));
+    }
+    else if (command.startsWith("TIMEOUT=")) {
+        int timeout = command.substring(8).toInt();
+        writeEEPROMint(ADDR_TIMEOUT_VALUE, timeout);
+        Serial.println("TIMEOUT set to " + String(timeout));
+    }
+    else if (command == "RESET") {
+        resetToDefaults();
+        Serial.println("All parameters reset to default values.");
+    }
+    else if (command == "VERSION") {
+        Serial.println("Version: 1.0.0, Lot: 12345");
+    }
+    else {
+        Serial.println("Unknown command.");
+    }
+}
+void resetToDefaults() {
+    writeEEPROMint(ADDR_LOG_INTERVAL_VALUE, 10);
+    writeEEPROMint(ADDR_FILE_MAX_SIZE_VALUE, 4096);
+    writeEEPROMint(ADDR_TIMEOUT_VALUE, 30);
+    //... (réinitialisez d'autres valeurs par défaut si nécessaire)
+}
+
 void maintenanceMode(){
   //Pas de sauvegarde de carte sd
   //recup données via port série
