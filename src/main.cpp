@@ -39,8 +39,10 @@ void standardMode();
 void configMode();
 void maintenanceMode();
 void flashLed(int durationForWhite, int durationForRed);
+void checkError();
 
 void setup() {
+  leds.setColorRGB(0, 0, 0, 0);
   Serial.begin(9600);
   while (!Serial && millis() > 5000);
 
@@ -50,7 +52,10 @@ void setup() {
 
   if (!clock.isrunning()) clock.adjust(DateTime(2023, 10, 23, 11, 48, 30));
 
-  while(!SD.begin(4)) Serial.println("Card failed or not present");
+  while(!SD.begin(4)){
+    flashLed(2, 1);
+    Serial.println("Card failed or not present");
+  }
 
   DateTime now = clock.now();
   Serial.print(now.hour());
@@ -67,7 +72,7 @@ void setup() {
 
   pinMode(RED_BUTTON, INPUT_PULLUP);
   pinMode(GREEN_BUTTON, INPUT_PULLUP);
-  leds.setColorRGB(0, 0, 0, 0);
+
 
   changeMode(!digitalRead(RED_BUTTON) ? CONFIG : STANDARD);
 
@@ -79,7 +84,7 @@ void setup() {
 }
 
 void loop() {
-  
+  checkError();
   if (millis() - lastRecordTime >= 4800000) {  // 80 minutes : 4800000
     saveDataToSD();
   }
@@ -116,26 +121,30 @@ void saveDataToSD() {
         dataFile.print("Light Level: "); dataFile.println(analogRead(LIGHT_SENSOR_PIN));
         dataFile.close();
         dataFile.sync();
-        if (SD.card()->errorCode()) { 
-          flashLed(2,1);
-        }
         Serial.print("Data written to "); Serial.println(filename);
         
         recordCounter++;
         lastRecordTime = millis();
     } else {
         Serial.print("error opening "); Serial.println(filename);
-        while(!SD.begin(4)) Serial.println("Card failed or not present");
-        if (SD.card()->errorCode()) {  // Si une erreur de carte SD se produit
-            // LED intermittente rouge et blanche (fréquence 1Hz, durée 2 fois plus longue pour le blanc)
-            flashLed(2, 1);  // flashLed(durationForWhite, durationForRed)
-        } else {
-            // LED intermittente rouge et blanche (fréquence 1Hz, durée identique pour les 2 couleurs)
-            flashLed(1, 1);
-        }
     }
 }
+void checkError(){
+  while (!bme280.init()){
+    Serial.println("Device error!");
+    flashLed(1,1);
+  } 
 
+  while (!clock.begin()){
+    Serial.println("Couldn't find RTC");
+    flashLed(3,2);
+
+  } 
+  while(!SD.begin(4)){
+    flashLed(2, 1);
+    Serial.println("Card failed or not present");
+  }
+}
 
 
 void flashLed(int durationForWhite, int durationForRed) {
