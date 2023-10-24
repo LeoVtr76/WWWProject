@@ -213,7 +213,7 @@ void configMode(){
 }
 
 
-void reset(){
+void resetToDefaults(){
   //  initialisation de tous les paramètres aux valeurs par défaut
 }
 
