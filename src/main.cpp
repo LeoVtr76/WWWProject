@@ -38,6 +38,7 @@ void ecoMode();
 void standardMode();
 void configMode();
 void maintenanceMode();
+void flashLed(int durationForWhite, int durationForRed);
 
 void setup() {
   Serial.begin(9600);
@@ -114,14 +115,37 @@ void saveDataToSD() {
         dataFile.print("Pressure: "); dataFile.print(bme280.getPressure()); dataFile.println("Pa");
         dataFile.print("Light Level: "); dataFile.println(analogRead(LIGHT_SENSOR_PIN));
         dataFile.close();
-
+        dataFile.sync();
+        if (SD.card()->errorCode()) { 
+          flashLed(2,1);
+        }
         Serial.print("Data written to "); Serial.println(filename);
         
         recordCounter++;
         lastRecordTime = millis();
     } else {
         Serial.print("error opening "); Serial.println(filename);
+        while(!SD.begin(4)) Serial.println("Card failed or not present");
+        if (SD.card()->errorCode()) {  // Si une erreur de carte SD se produit
+            // LED intermittente rouge et blanche (fréquence 1Hz, durée 2 fois plus longue pour le blanc)
+            flashLed(2, 1);  // flashLed(durationForWhite, durationForRed)
+        } else {
+            // LED intermittente rouge et blanche (fréquence 1Hz, durée identique pour les 2 couleurs)
+            flashLed(1, 1);
+        }
     }
+}
+
+
+
+void flashLed(int durationForWhite, int durationForRed) {
+    for (int i = 0; i < 5; i++) {  // 5 fois pour une durée totale d'environ 10 secondes
+        leds.setColorRGB(0, 255, 255, 255);  // Blanc
+        delay(durationForWhite * 500);  // Multiplié par 500 pour obtenir une fréquence de 1Hz
+        leds.setColorRGB(0, 255, 0, 0);  // Rouge
+        delay(durationForRed * 500);
+    }
+    leds.setColorRGB(0, 0, 0, 0);  // Eteindre la LED après la séquence
 }
 
 void readAndPrintSensors() {
@@ -139,19 +163,27 @@ void readAndPrintSensors() {
     lastGetTime = millis();
 }
 void ecoMode(){
-  logInterval = 5;
+  logInterval = logInterval * 2;
+  //temps recup gps x 2
 }
 void standardMode(){
-  logInterval = 30;
+  logInterval = 10;
+  //Enregistre données sur carte SD jusqu'a ce que le fichier soit full (2ko), il ecrit sur un nouveau fichier
+  //Pas compris la 3e instruction
 }
 void configMode(){
   logInterval = 10;
-  //Formatter disque dur ?
+  //Modifier parametres EEPROM ?
+  //Formatter disque dur ? en 4k TUA
   //Reinitialiser paramètres
   //Interface pour taper des commandes
-  
+  //Affiche version + numéro de lot
+
 }
 void maintenanceMode(){
+  //Pas de sauvegarde de carte sd
+  //recup données via port série
+  // permet de changer la carte sd
 }
 
 void buttonPressed() {
