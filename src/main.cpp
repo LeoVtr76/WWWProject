@@ -134,18 +134,18 @@ void checkError(){
     Serial.println("Device error!");
     flashLed(1,1);
   } 
-
+  changeMode(currentMode);
   while (!clock.begin()){
     Serial.println("Couldn't find RTC");
     flashLed(3,2);
-
   } 
+  changeMode(currentMode);
   while(!SD.begin(4)){
     flashLed(2, 1);
     Serial.println("Card failed or not present");
   }
+  changeMode(currentMode);
 }
-
 
 void flashLed(int durationForWhite, int durationForRed) {
     for (int i = 0; i < 5; i++) {  // 5 fois pour une durée totale d'environ 10 secondes
