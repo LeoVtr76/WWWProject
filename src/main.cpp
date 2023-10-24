@@ -18,6 +18,7 @@
 #define LIGHT_SENSOR_PIN A0
 #define BUTTON_CHECK_INTERVAL 100000  // 100ms in microseconds
 
+extern ChainableLED leds;
 ChainableLED leds(5, 6, NUM_LEDS);
 BME280 bme280;
 RTC_DS1307 clock;
@@ -75,4 +76,3 @@ void loop() {
         case MAINTENANCE: maintenanceMode(); break;
     }
 }
-
