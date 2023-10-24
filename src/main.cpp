@@ -17,17 +17,13 @@ BME280 bme280;
 RTC_DS1307 clock;
 SdFat SD;
 int recordCounter = 1;
-unsigned long lastRecordTime = 0;
-
+unsigned long lastRecordTime = 0, configStartTime = 0, lastGetTime = 0, buttonPressTime = 0;
 enum Mode {CONFIG, STANDARD, ECO, MAINTENANCE};
 Mode currentMode;
 Mode lastMode;
-
-volatile unsigned long buttonPressTime = 0;
 volatile bool isButtonPressed = false;
-unsigned long configStartTime = 0;
 int logInterval = 30;
-unsigned long lastGetTime = 0;
+
 void changeMode(Mode newMode);
 void buttonPressed();
 void checkButton();
@@ -38,25 +34,71 @@ void ecoMode();
 void standardMode();
 void configMode();
 void maintenanceMode();
-void flashLed(int durationForWhite, int durationForRed);
+void flashLedError(int red, int green, int blue, int duration1, int duration2);
 void checkError();
+void printDateTime();
 
 void setup() {
-  leds.setColorRGB(0, 0, 0, 0);
   Serial.begin(9600);
+  pinMode(RED_BUTTON, INPUT_PULLUP);
+  pinMode(GREEN_BUTTON, INPUT_PULLUP);
+  leds.setColorRGB(0, 0, 0, 0);
   while (!Serial && millis() > 5000);
-
-  while (!bme280.init()) Serial.println("Device error!");
-
   while (!clock.begin()) Serial.println("Couldn't find RTC");
 
   if (!clock.isrunning()) clock.adjust(DateTime(2023, 10, 23, 11, 48, 30));
+  printDateTime();
+  changeMode(!digitalRead(RED_BUTTON) ? CONFIG : STANDARD);
+  attachInterrupt(digitalPinToInterrupt(RED_BUTTON), buttonPressed, FALLING);
+  attachInterrupt(digitalPinToInterrupt(GREEN_BUTTON), buttonPressed, FALLING);
+  Timer1.initialize(BUTTON_CHECK_INTERVAL);
+  Timer1.attachInterrupt(checkButton);
+}
 
-  while(!SD.begin(4)){
-    flashLed(2, 1);
-    Serial.println("Card failed or not present");
+void loop() {
+  readAndPrintSensors();
+  checkError();
+  if (millis() - lastRecordTime >= 4800000) saveDataToSD();  // 80 minutes : 4800000
+    
+  if(millis() - lastGetTime >= logInterval * 60000)readAndPrintSensors();
+
+  switch(currentMode){
+    case CONFIG : configMode(); break;
+    case STANDARD : standardMode(); break;
+    case ECO : ecoMode(); break;
+    case MAINTENANCE : maintenanceMode(); break;
   }
-
+}
+void checkError(){
+  bool errorFlag = false;
+  if(!bme280.init()){
+    Serial.println("Device error!");
+    flashLedError(255, 0, 0, 1, 1);
+    errorFlag = true;
+  } 
+  if(!clock.begin()){
+    Serial.println("Couldn't find RTC");
+    flashLedError(255, 0, 255, 1, 1);
+    errorFlag = true;
+  }
+  if(!SD.begin(4)){
+    flashLedError(255, 255, 255, 2, 1);
+    Serial.println("Card failed or not present");
+    errorFlag = true;
+  }
+  // if (carte sd pleine){
+  //    flashLedError(255,255,255,1,1);
+  //    errorFlag = true;
+  // }
+  float temperature = bme280.getTemperature();
+  if (temperature < -50 || temperature > 50) { 
+    Serial.println("Inconsistent temperature data!");
+    flashLedError(255, 0, 0, 2, 1);
+  }
+  if (!errorFlag) changeMode(currentMode);
+  
+}
+void printDateTime(){
   DateTime now = clock.now();
   Serial.print(now.hour());
   Serial.print(":");
@@ -69,43 +111,6 @@ void setup() {
   Serial.print(now.day());
   Serial.print("/");
   Serial.println(now.year());
-
-  pinMode(RED_BUTTON, INPUT_PULLUP);
-  pinMode(GREEN_BUTTON, INPUT_PULLUP);
-
-
-  changeMode(!digitalRead(RED_BUTTON) ? CONFIG : STANDARD);
-
-  attachInterrupt(digitalPinToInterrupt(RED_BUTTON), buttonPressed, FALLING);
-  attachInterrupt(digitalPinToInterrupt(GREEN_BUTTON), buttonPressed, FALLING);
-
-  Timer1.initialize(BUTTON_CHECK_INTERVAL);
-  Timer1.attachInterrupt(checkButton);
-}
-
-void loop() {
-  checkError();
-  if (millis() - lastRecordTime >= 4800000) {  // 80 minutes : 4800000
-    saveDataToSD();
-  }
-  if(millis() - lastGetTime >= logInterval * 60000){
-      readAndPrintSensors();
-  }
-
-  switch(currentMode){
-    case CONFIG :
-      configMode();
-      break;
-    case STANDARD :
-      standardMode();
-      break;
-    case ECO :
-      ecoMode();
-      break;
-    case MAINTENANCE :
-      maintenanceMode();
-      break;
-  }
 }
 void saveDataToSD() {
     int day, month, year;
@@ -129,32 +134,16 @@ void saveDataToSD() {
         Serial.print("error opening "); Serial.println(filename);
     }
 }
-void checkError(){
-  while (!bme280.init()){
-    Serial.println("Device error!");
-    flashLed(1,1);
-  } 
-  changeMode(currentMode);
-  while (!clock.begin()){
-    Serial.println("Couldn't find RTC");
-    flashLed(3,2);
-  } 
-  changeMode(currentMode);
-  while(!SD.begin(4)){
-    flashLed(2, 1);
-    Serial.println("Card failed or not present");
-  }
-  changeMode(currentMode);
-}
 
-void flashLed(int durationForWhite, int durationForRed) {
-    for (int i = 0; i < 5; i++) {  // 5 fois pour une durée totale d'environ 10 secondes
-        leds.setColorRGB(0, 255, 255, 255);  // Blanc
-        delay(durationForWhite * 500);  // Multiplié par 500 pour obtenir une fréquence de 1Hz
-        leds.setColorRGB(0, 255, 0, 0);  // Rouge
-        delay(durationForRed * 500);
-    }
-    leds.setColorRGB(0, 0, 0, 0);  // Eteindre la LED après la séquence
+
+void flashLedError(int red, int green, int blue, int duration1, int duration2) {
+  for (int i = 0; i < 5; i++) {  // 5 fois pour une durée totale d'environ 10 secondes
+    leds.setColorRGB(0, red, green, blue);  
+    delay(duration1 * 500);  
+    leds.setColorRGB(0, 255, 0, 0);  // Rouge
+    delay(duration2 * 500);
+  }
+  leds.setColorRGB(0, 0, 0, 0);  // Éteindre la LED après la séquence
 }
 
 void readAndPrintSensors() {
