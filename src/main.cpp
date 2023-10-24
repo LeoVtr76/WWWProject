@@ -76,20 +76,21 @@ void loop() {
     }
 }
 void buttonPressed() {
-    isButtonPressed = true;
-    buttonPressTime = millis();
+  buttonPressTime = millis();
+  isButtonPressed = true;
+  if (currentMode == ECO && digitalRead(GREEN_BUTTON) == LOW) changeMode(STANDARD);
 }
 
 void checkButton() {
-    if (!isButtonPressed) return;
-
-    if (millis() - buttonPressTime > 3000) {
-        if (currentMode == CONFIG) {
-            changeMode(lastMode);
-        } else {
-            lastMode = currentMode;
-            changeMode(CONFIG);
-        }
+    if (currentMode == CONFIG && (millis() - configStartTime >= 1800000)) changeMode(STANDARD);
+    if (isButtonPressed && (millis() - buttonPressTime >= 5000)) {
         isButtonPressed = false;
+        if (currentMode == MAINTENANCE && digitalRead(RED_BUTTON) == LOW) changeMode(lastMode);
+        else if (digitalRead(RED_BUTTON) == LOW) {
+            lastMode = currentMode;
+            changeMode(MAINTENANCE);
+        } else if (digitalRead(GREEN_BUTTON) == LOW && currentMode == STANDARD) {
+            changeMode(ECO);
+        }
     }
 }
