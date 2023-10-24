@@ -261,11 +261,12 @@ void handleSerialCommand(String command) {
         Serial.println("Unknown command.");
     }
 }
+
+
 void resetToDefaults() {
     writeEEPROMint(ADDR_LOG_INTERVAL_VALUE, 10);
     writeEEPROMint(ADDR_FILE_MAX_SIZE_VALUE, 4096);
     writeEEPROMint(ADDR_TIMEOUT_VALUE, 30);
-    //... (réinitialisez d'autres valeurs par défaut si nécessaire)
 }
 
 void maintenanceMode(){
