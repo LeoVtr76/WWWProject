@@ -11,14 +11,13 @@
 #include "commands.h"
 #include "eeprom_manager.h"
 #include "sensors.h"
+#include "globals.h"
 
 #define NUM_LEDS 1
 #define RED_BUTTON 2
 #define GREEN_BUTTON 3
-#define LIGHT_SENSOR_PIN A0
 #define BUTTON_CHECK_INTERVAL 100000  // 100ms in microseconds
 
-extern ChainableLED leds;
 ChainableLED leds(5, 6, NUM_LEDS);
 BME280 bme280;
 RTC_DS1307 clock;
@@ -74,5 +73,23 @@ void loop() {
         case STANDARD: standardMode(); break;
         case ECO: ecoMode(); break;
         case MAINTENANCE: maintenanceMode(); break;
+    }
+}
+void buttonPressed() {
+    isButtonPressed = true;
+    buttonPressTime = millis();
+}
+
+void checkButton() {
+    if (!isButtonPressed) return;
+
+    if (millis() - buttonPressTime > 3000) {
+        if (currentMode == CONFIG) {
+            changeMode(lastMode);
+        } else {
+            lastMode = currentMode;
+            changeMode(CONFIG);
+        }
+        isButtonPressed = false;
     }
 }
