@@ -61,7 +61,7 @@ void loop(){
 
 }
 
-void checkErrror(){
+void checkError(){
   // initialiser errorFlag = false
   
   //  Si la carteSD n'est pas présente
