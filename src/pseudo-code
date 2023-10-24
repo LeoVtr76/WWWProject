@@ -1,0 +1,158 @@
+#include <ChainableLED.h>
+#include <TimerOne.h>
+#include <RTClib.h>
+#include "Seeed_BME280.h"
+#include <Wire.h>
+
+
+//  Définition des pins
+//  Initialisation des variables globales
+
+//  énumération de nos modes = {CONFIG,STANDARD,MAINTENANCE,ECO}
+//  Création de currentMode       //il récupère le mode actuel
+//  Création de lastMode          //il récupère le mode précèdent
+
+void setup(){
+    // Initialiser Broches
+    // Initialiser l'horloge RTC
+    // Initialiser les paramètres EEPROM
+    // Initialiser les interruptions des boutons
+    // Verifier si le bouton rouge est pressé
+        // currentMode = CONFIG
+    // Sinon currentMode = STANDARD   
+
+}
+
+
+
+void loop(){
+}
+
+
+void reset(){
+  //  initialisation de tous les paramètres aux valeurs par défaut
+}
+
+
+
+
+void sauvegarde_carteSD(){
+  //  Sauvegarde les données des capteurs sur la carte sd
+  // SI Données reçues d’un capteur incohérentes 
+        //  LED intermittente rouge et verte (fréquence 1Hz,durée 2 fois plus longue pour le vert)
+        //afficher sur interface série "vérification matérielle requise"
+  //  SI Erreur d’accès ou d’écriture sur la carte SD 
+        //  LED intermittente rouge et blanche (fréquence 1Hz, durée 2 fois plus longue pour le blanc)
+  //  SI Carte SD pleine 
+        //  LED intermittente rouge et blanche (fréquence 1Hz, durée identique pour les 2 couleurs)
+
+}
+
+
+int capteur_luminosite(){
+    // Appel de la fonction config pour récuperer les paramètres modifiables
+    // vérifie l'état d'activation du capteur
+    /* Récupérer niveau de luminosité : 
+          Si Valeur < LUMIN_LOW -> renvoyer « faible » 
+          Si Valeur > LUMIN_HIGH ->renvoyer « forte » 
+          Si LUMIN_LOW<Valeur <LUMIN_HIGH ->renvoyer Valeur
+    */
+}
+
+int capteur_temperature(){
+    // Appel de la fonction config pour récuperer les paramètres modifiables
+    // vérifie l'état d'activation du capteur
+    /* Récupérer température: 
+        Si Valeur < MIN_TEMP_AIR-> renvoyer une erreur
+        Si Valeur > MAX_TEMP_AIR ->renvoyer une erreur
+        Si MIN_TEMP_AIR <Valeur < MAX_TEMP_AIR ->renvoyer Valeur
+    */
+}
+
+int capteur_hygrometrie(){
+    // Appel de la fonction config pour récuperer les paramètres modifiables
+    // vérifie l'état d'activation du capteur
+    /* Récupérer niveau d’hydrométrie: 
+        Si Valeur < HYGR_MINT-> valeur pas prise en compte
+        Si Valeur > HYGR_MAXT-> valeur pas prise en compte
+        Si HYGR_MINT <Valeur < HYGR_MAXT ->renvoyer Valeur 
+    */
+}
+
+int capteur_pression(){
+    // Appel de la fonction config pour récuperer les paramètres modifiables
+    // vérifie l'état d'activation du capteur
+    /* Récupérer niveau de pression: 
+        Si Valeur < PRESSURE_MIN-> renvoyer une erreur
+        Si Valeur > PRESSURE_MAX -> renvoyer une erreur
+        Si PRESSURE_MIN <Valeur < PRESSURE_MAX ->renvoyer Valeur
+    */
+}
+
+int capteur_gps(){
+    // Appel de la fonction config pour récuperer les paramètres modifiables
+    // vérifie l'état d'activation du capteur
+    // Récupération position :
+    // Si Erreur d’accès aux données du GPS
+      //  LED intermittente rouge et jaune (fréquence 1Hz, durée identique pour les 2 couleurs)
+    // Sinon retourne position GPS
+}
+
+void buttonPressed() {    //  vérifie quel bouton est préssé 
+    //  Vérifie si le temps > 5000 ms 
+    //  Vérifie l'état du mode
+    //  appel fontion changeMode
+}
+
+void changeMode(Mode newMode) {  //  Fonction qui s'effectue lors d'un changement de mode
+
+  //  si newMode = MAINTENANCE
+    //  appel de la fonction maintenance en boucle
+  //  sinon si newMode = ECO
+    //  appel de la fonction economie en boucle
+  //  sinon si newMode = STANDARD
+    //  appel de la fonction standard en boucle
+  //  sinon si newMode = CONFIG
+    //  appel de la fonction configuration en boucle
+}
+
+
+
+void maintenance(){
+  //  Allumage led orange continue 
+  //  Arrêt de la sauvegarde des données sur la carte SD
+  //  Permettre de consulter les données en direct depuis le port série
+  //  Permettre de changer la carte sd
+}
+
+void economie(){
+  //  Allumage led bleue continue 
+  //  Temps entre l’acquisition données du GPS x2
+  //  le temps entre 2 mesure (LOG_INTERVAL) x2
+  //  Appel des fonctions des capteurs
+
+}
+
+void standard(){
+  //  Allumage LED verte continue
+  //  delay(LOG_INTERVAL)
+  //  Appel des fonctions des capteurs
+  //  Appel de la fonction sauvegarde_carteSD
+
+}
+
+void configuration(){
+  //  Allumage LED jaune continue
+  //  Permettre de taper des commandes de configuration pour modifier les valeurs des paramètres enregistrés dans l’EEPROM : 
+    //  LOG_INTERVALL=10 -> définition de l’intervalle entre 2 mesures, 10 minutes par défaut. 
+    //  FILE_MAX_SIZE=4096 -> définition de la taille maximale (en octets) d'un fichier de log, une taille de 4ko provoque son archivage. 
+    //  RESET -> réinitialisation de l’ensemble des paramètres à leurs valeurs par défaut. 
+    //  VERSION -> affiche la version du programme et un numéro de lot (permet de tracer la production) 
+    //  Passer en mode standard au bout de 30 min 
+}
+
+
+
+
+
+void changeMode(Mode newMode);
