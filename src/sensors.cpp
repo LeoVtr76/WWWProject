@@ -4,6 +4,7 @@
 #include "eeprom_manager.h"
 #include <SdFat.h>
 #include <RTClib.h>
+#include "globals.h"
 
 extern ChainableLED leds;
 extern BME280 bme280;
@@ -11,7 +12,6 @@ extern RTC_DS1307 clock;
 extern SdFat SD;
 extern int recordCounter;
 extern Mode currentMode;
-extern const int LIGHT_SENSOR_PIN;
 
 void readAndPrintSensors() {
     float temperature = bme280.getTemperature();
