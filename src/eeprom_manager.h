@@ -22,3 +22,4 @@
 
 void writeEEPROMint(int address, int value);
 int readEEPROMint(int address);
+void initializeEEPROMDefaults();
