@@ -2,10 +2,10 @@
 #include "eeprom_manager.h"
 
 void handleSerialCommand(String command) {
-    if (command.startsWith("LOG_INTERVALL=")) {
+    if (command.startsWith("LOG_INTERVAL=")) {
         int logInterval = command.substring(13).toInt();
         writeEEPROMint(ADDR_LOG_INTERVAL_VALUE, logInterval);
-        Serial.println("LOG_INTERVALL set to " + String(logInterval));
+        Serial.println("LOG_INTERVAL set to " + String(logInterval));
     }
     else if (command.startsWith("FILE_MAX_SIZE=")) {
         int fileSize = command.substring(13).toInt();
