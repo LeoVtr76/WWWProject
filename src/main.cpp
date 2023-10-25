@@ -27,12 +27,13 @@ unsigned long lastRecordTime = 0, configStartTime = 0, lastGetTime = 0, buttonPr
 Mode currentMode;
 Mode lastMode;
 volatile bool isButtonPressed = false;
-int logInterval = 30;
+int logInterval;
 
 void setup() {
     Serial.begin(9600);
     if (readEEPROMint(ADDR_LOG_INTERVAL_VALUE) == 0xFF) {
         initializeEEPROMDefaults();
+        Serial.println("EEPROM value initiate");
     }
 
     pinMode(RED_BUTTON, INPUT_PULLUP);
@@ -49,6 +50,8 @@ void setup() {
         }
         printDateTime();
     }
+    logInterval = readEEPROMint(ADDR_LOG_INTERVAL_VALUE);
+    Serial.println(logInterval);
 
     changeMode(!digitalRead(RED_BUTTON) ? CONFIG : STANDARD);
     attachInterrupt(digitalPinToInterrupt(RED_BUTTON), buttonPressed, FALLING);
@@ -59,13 +62,10 @@ void setup() {
 
 void loop() {
     checkError();
-
-    if (millis() - lastRecordTime >= 4800000) {
-        saveDataToSD();  // 80 minutes : 4800000
-    }
     
-    if (millis() - lastGetTime >= logInterval * 60000) {
+    if (millis() - lastGetTime >= logInterval * 1) { //REMETTRE *60000 pour mettre des minutes en entrées
         readAndPrintSensors();
+        lastGetTime = millis();
     }
 
     switch (currentMode) {
@@ -82,7 +82,7 @@ void buttonPressed() {
 }
 
 void checkButton() {
-    if (currentMode == CONFIG && (millis() - configStartTime >= 1800000)) changeMode(STANDARD);
+    if (currentMode == CONFIG && (millis() - configStartTime >= 50000)) changeMode(STANDARD); // Pour 30 min : 1800000
     if (isButtonPressed && (millis() - buttonPressTime >= 5000)) {
         isButtonPressed = false;
         if (currentMode == MAINTENANCE && digitalRead(RED_BUTTON) == LOW) changeMode(lastMode);
