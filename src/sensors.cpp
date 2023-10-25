@@ -25,6 +25,7 @@ void readAndPrintSensors() {
     float voltage = lightLevel * (5.0 / 1023.0);
     Serial.print("Lecture brute : "); Serial.print(lightLevel);
     Serial.print("\tTension : "); Serial.println(voltage);
+    saveDataToSD();
 }
 
 void saveDataToSD() {
@@ -35,15 +36,18 @@ void saveDataToSD() {
     
     SdFile dataFile;
     if (dataFile.open(filename, O_WRITE | O_CREAT | O_AT_END)) {
-        dataFile.print("Temperature: "); dataFile.print(bme280.getTemperature()); dataFile.println("C");
-        dataFile.print("Humidity: "); dataFile.print(bme280.getHumidity()); dataFile.println("%");
-        dataFile.print("Pressure: "); dataFile.print(bme280.getPressure()); dataFile.println("Pa");
-        dataFile.print("Light Level: "); dataFile.println(analogRead(LIGHT_SENSOR_PIN));
+        dataFile.print("Temperature: "); dataFile.print(bme280.getTemperature()); dataFile.print("C; ");
+        dataFile.print("Humidity: "); dataFile.print(bme280.getHumidity()); dataFile.print("%; ");
+        dataFile.print("Pressure: "); dataFile.print(bme280.getPressure()); dataFile.print("Pa; ");
+        dataFile.print("Light Level: "); dataFile.print(analogRead(LIGHT_SENSOR_PIN)) ; dataFile.print("; ");
+        int fileSize = dataFile.fileSize();
         dataFile.close();
         dataFile.sync();
         Serial.print("Data written to "); Serial.println(filename);
         
-        recordCounter++;
+        if (fileSize > 4048) {
+            recordCounter++;
+        }
     } else {
         Serial.print("error opening "); Serial.println(filename);
     }
