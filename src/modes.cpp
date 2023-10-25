@@ -19,7 +19,6 @@ void changeMode(Mode newMode) {
 }
 
 void ecoMode() {
-    Serial.println("eco");
     int logInterval = readEEPROMint(ADDR_LOG_INTERVAL_VALUE);
     logInterval *= 2;
     writeEEPROMint(ADDR_LOG_INTERVAL_VALUE, logInterval);
@@ -27,7 +26,6 @@ void ecoMode() {
 }
 
 void standardMode() {
-    Serial.println("standard");
     int logInterval = 10;
     writeEEPROMint(ADDR_LOG_INTERVAL_VALUE, logInterval);
     // Enregistre données sur carte SD jusqu'à ce que le fichier soit full (2ko), il écrit sur un nouveau fichier
@@ -35,7 +33,6 @@ void standardMode() {
 }
 
 void configMode() {
-    Serial.println("config");
     if (Serial.available()) {
         String command = Serial.readStringUntil('\n');
         handleSerialCommand(command);
@@ -48,7 +45,6 @@ void configMode() {
 }
 
 void maintenanceMode() {
-    Serial.println("maintenance");
     // Pas de sauvegarde de carte sd
     // récup données via port série
     // permet de changer la carte sd
