@@ -4,8 +4,4 @@ potentiometre pour modifier des valeurs
 Modele 3D case
 Imprimer
 GPS
-Expliquer pourquoi on separe + (cpp + h)
-Ajouter un parametre SafeMode : True : Ajoute 73 octets de vide par cluster  2*(fileSize/temp)
-                                False: Met pile ce qu'il faut pour remplir un cluster
-
 Si pas de carte SD, stocker valeurs dans un tableau ??
