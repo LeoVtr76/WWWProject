@@ -123,14 +123,15 @@ void buttonPressed() {
 }
 
 void checkButton() {
-    if (isButtonPressed && (millis() - buttonPressTime >= 5000)) {
-        isButtonPressed = false;
-        if (currentMode == MAINTENANCE && digitalRead(RED_BUTTON) == LOW) changeMode(lastMode);
-        else if (digitalRead(RED_BUTTON) == LOW) {
-            lastMode = currentMode;
-            changeMode(MAINTENANCE);
-        } else if (digitalRead(GREEN_BUTTON) == LOW && currentMode == STANDARD) {
-            changeMode(ECO);
+    if (isButtonPressed && !isButtonReleased) {
+        if (transitionStep < TRANSITION_STEPS) {
+            // Effectue une étape de la transition
+            float progress = (float)transitionStep / TRANSITION_STEPS;
+            setTransitionColor(currentMode, targetMode, progress);
+            transitionStep++;
+        } else {
+            completeTransitionToNewMode();
+            isButtonPressed = false;
         }
     }
 }
@@ -154,7 +155,7 @@ void configMode() {
         String command = Serial.readStringUntil('\n');
         handleSerialCommand(command);
     }
-    if (millis() >= 1800000) changeMode(STANDARD); // Pour 30 min : 1800000
+    if (millis() >= 10000) changeMode(STANDARD); // Pour 30 min : 1800000
     // Modifier paramètres EEPROM ?
     // Formatter disque dur ? en 4k TUA
     // Réinitialiser paramètres
