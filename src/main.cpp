@@ -3,6 +3,7 @@
 #include <RTClib.h>
 #include <Wire.h>
 // #include <SdFat.h>
+//#include <SDI>
 #include <SD.h>
 #include <EEPROM.h>
 #include <Adafruit_BME280.h>
@@ -37,6 +38,8 @@ ChainableLED leds(5, 6, NUM_LEDS);
 Adafruit_BME280 bme;
 RTC_DS1307 clock;
 //SdFat SD;
+SdVolume volume;
+Sd2Card card;
 byte recordCounter = 1;
 unsigned long lastGetTime = 0, buttonPressTime = 0;
 Mode currentMode;
@@ -44,7 +47,6 @@ Mode lastMode;
 volatile bool isButtonPressed = false;
 byte logInterval;
 bool errorFlag = false;
-
 
 //Prototype
 void changeMode(Mode mode);
@@ -70,14 +72,14 @@ void setup() {
     Serial.begin(9600);
     if (readEEPROMint(ADDR_LOG_INTERVAL_VALUE) == 0xFF) {
         initializeEEPROMDefaults();
-        Serial.println(F("EEPROM value initiate"));
+        //Serial.println(F("EEPROM value initiate"));
     }
     pinMode(RED_BUTTON, INPUT_PULLUP);
     pinMode(GREEN_BUTTON, INPUT_PULLUP);
     pinMode(LIGHT_SENSOR_PIN, INPUT);
     while (!Serial && millis() > 5000);
     if (!clock.begin()) {
-        Serial.println(F("Couldn't find RTC"));
+        //Serial.println(F("Couldn't find RTC"));
     } else {
         if (!clock.isrunning()) {
             clock.adjust(DateTime(2023, 10, 23, 11, 48, 30));
@@ -123,15 +125,14 @@ void buttonPressed() {
 }
 
 void checkButton() {
-    if (isButtonPressed && !isButtonReleased) {
-        if (transitionStep < TRANSITION_STEPS) {
-            // Effectue une étape de la transition
-            float progress = (float)transitionStep / TRANSITION_STEPS;
-            setTransitionColor(currentMode, targetMode, progress);
-            transitionStep++;
-        } else {
-            completeTransitionToNewMode();
-            isButtonPressed = false;
+    if (isButtonPressed && (millis() - buttonPressTime >= 5000)) {
+        isButtonPressed = false;
+        if (currentMode == MAINTENANCE && digitalRead(RED_BUTTON) == LOW) changeMode(lastMode);
+        else if (digitalRead(RED_BUTTON) == LOW) {
+            lastMode = currentMode;
+            changeMode(MAINTENANCE);
+        } else if (digitalRead(GREEN_BUTTON) == LOW && currentMode == STANDARD) {
+            changeMode(ECO);
         }
     }
 }
@@ -155,7 +156,7 @@ void configMode() {
         String command = Serial.readStringUntil('\n');
         handleSerialCommand(command);
     }
-    if (millis() >= 10000) changeMode(STANDARD); // Pour 30 min : 1800000
+    if (millis() >= 1800000) changeMode(STANDARD); // Pour 30 min : 1800000
     // Modifier paramètres EEPROM ?
     // Formatter disque dur ? en 4k TUA
     // Réinitialiser paramètres
@@ -172,6 +173,7 @@ void maintenanceMode() {
 
 //gestion des capteurs et des erreurs
 void saveDataToSD() {
+    bool lumin = (readEEPROMint(ADDR_LUMIN));
     int day, month, year;
     calculateDate(&day, &month, &year);
     char filename[15];
@@ -204,25 +206,38 @@ void saveDataToSD() {
         temperature = bme.readTemperature();
         humidity = bme.readHumidity();
         pressure = bme.readPressure();
-        lightLevel = analogRead(LIGHT_SENSOR_PIN);
-        voltage = lightLevel * (5.0/1023.0);
-        if(voltage < 1000 && bme.begin(0x76)) break;
-        delay(100);
+        if(lumin){
+            lightLevel = analogRead(LIGHT_SENSOR_PIN);
+            voltage = lightLevel * (5.0/1023.0);
+            if(voltage < 1000 && bme.begin(0x76)) break;
+            delay(100);
+        }
+        else{
+            lightLevel = -1;
+            voltage = NAN;
+        }
+
     }
     if(!bme.begin(0x76)) temperature = humidity = pressure = NAN;
-    if(lightLevel > 1000){
+    if(lumin){
+        if(lightLevel > 1000){
         lightLevel = -1;
         voltage = NAN;
+        }
+        int luminLow = readEEPROMint(ADDR_LUMIN_LOW);
+        int luminHigh = readEEPROMint(ADDR_LUMIN_HIGH);
+        if (lightLevel < luminLow && lightLevel >= 0) {
+            luminosityDescription = F("faible");
+        } else if(lightLevel > luminHigh && lightLevel < 1000) {
+            luminosityDescription = F("forte");
+        }else {
+            luminosityDescription = String(lightLevel);
+        }
     }
-    int luminLow = readEEPROMint(ADDR_LUMIN_LOW);
-    int luminHigh = readEEPROMint(ADDR_LUMIN_HIGH);
-    if (lightLevel < luminLow) {
-        luminosityDescription = F("faible");
-    } else if(lightLevel > luminHigh && lightLevel < 1000) {
-        luminosityDescription = F("forte");
-    } else {
-        luminosityDescription = String(lightLevel);
+    else {
+        luminosityDescription = F("Na");
     }
+    
 
     Serial.print(F("Temperature: ")); Serial.print(isnan(temperature) ? "Na" : String(temperature)); Serial.println("C");
     Serial.print(F("Humidity: ")); Serial.print(isnan(humidity) ? "Na" : String(humidity)); Serial.println("%");
@@ -238,7 +253,7 @@ void saveDataToSD() {
         Serial.println(F("Data written"));
         dataFile.close(); 
     } else {
-        Serial.print(F("error opening ")); Serial.println(filename);
+        //Serial.print(F("error opening ")); Serial.println(filename);
     }
 }
 
@@ -277,7 +292,7 @@ void checkError() {
         //Serial.println("BME dont work chef");
         errorFlag = true;
     }
-    //Serial.println(SD.card()->cardSize());
+    Serial.println(volume.blocksPerCluster()*volume.clusterCount() - volume.clusterCount() * 512);
     //  if (SD.vol()->sectorsPerCluster() *512L * SD.vol()->freeClusterCount() < 7 * 1024 * 1024 * 1024){
     //     Serial.println("Chef ya plus de place");
     //     flashLedError(255,255,255,1,1);
@@ -300,6 +315,12 @@ void handleSerialCommand(String command) {
         int logInterval = command.substring(13).toInt();
         writeEEPROMint(ADDR_LOG_INTERVAL_VALUE, logInterval);
         //Serial.println("LOG_INTERVAL set to " + String(logInterval));
+    }
+    else if (command.startsWith("LUMIN=")){
+        int luminValue = command.substring(6).toInt();
+        if(luminValue == 0 || luminValue == 1){
+            writeEEPROMint(ADDR_LUMIN, luminValue);
+        }
     }
     else if (command.startsWith("FILE_MAX_SIZE=")) {
         int fileSize = command.substring(13).toInt();
