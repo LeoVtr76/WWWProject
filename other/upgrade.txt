@@ -5,3 +5,7 @@ Modele 3D case
 Imprimer
 GPS
 Si pas de carte SD, stocker valeurs dans un tableau ??
+a ajouter :
+- TEMP_AIR
+- HYGR
+- PRESSURE
