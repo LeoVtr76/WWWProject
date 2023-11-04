@@ -1,4 +1,4 @@
-#pragma once // pour le décarer 1 fois meme si appelé plusieurs fois
+#pragma once // pour le déclarer 1 fois même si appelé plusieurs fois
 #include <EEPROM.h>
 
 #define ADDR_LOG_INTERVAL 0
