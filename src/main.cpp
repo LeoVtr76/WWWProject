@@ -221,8 +221,8 @@ void saveDataToSD() {
     if(!bme.begin(0x76)) temperature = humidity = pressure = NAN;
     if(lumin){
         if(lightLevel > 1000){
-        lightLevel = -1;
-        voltage = NAN;
+            lightLevel = -1;
+            voltage = NAN;
         }
         int luminLow = readEEPROMint(ADDR_LUMIN_LOW);
         int luminHigh = readEEPROMint(ADDR_LUMIN_HIGH);
@@ -312,55 +312,63 @@ void calculateDate(int* day, int* month, int* year) {
 
 void handleSerialCommand(String command) {
     if (command.startsWith("LOG_INTERVAL=")) {
-        int logInterval = command.substring(13).toInt();
-        writeEEPROMint(ADDR_LOG_INTERVAL_VALUE, logInterval);
+        writeEEPROMint(ADDR_LOG_INTERVAL_VALUE, command.substring(13).toInt());
         //Serial.println("LOG_INTERVAL set to " + String(logInterval));
     }
-    else if (command.startsWith("LUMIN=")){
-        int luminValue = command.substring(6).toInt();
-        if(luminValue == 0 || luminValue == 1){
-            writeEEPROMint(ADDR_LUMIN, luminValue);
-        }
-    }
     else if (command.startsWith("FILE_MAX_SIZE=")) {
-        int fileSize = command.substring(13).toInt();
-        writeEEPROMint(ADDR_FILE_MAX_SIZE_VALUE, fileSize);
+        writeEEPROMint(ADDR_FILE_MAX_SIZE_VALUE, command.substring(13).toInt());
         //Serial.println("FILE_MAX_SIZE set to " + String(fileSize));
     }
     else if (command.startsWith("TIMEOUT=")) {
-        int timeout = command.substring(8).toInt();
-        writeEEPROMint(ADDR_TIMEOUT_VALUE, timeout);
+        writeEEPROMint(ADDR_TIMEOUT_VALUE, command.substring(8).toInt());
         //Serial.println("TIMEOUT set to " + String(timeout));
     }
+    else if (command.startsWith("LUMIN=")){
+        writeEEPROMint(ADDR_LUMIN, command.substring(6).toInt() != 0);
+    }
     else if (command.startsWith("LUMIN_LOW=")){
-        int lumin_low = command.substring(10).toInt();
-        writeEEPROMint(ADDR_LUMIN_LOW, lumin_low);
+        writeEEPROMint(ADDR_LUMIN_LOW, command.substring(10).toInt());
         //Serial.println("LUMIN_LOW set to " + String(lumin_low));
     }
     else if (command.startsWith("LUMIN_HIGH=")){
-        int lumin_high = command.substring(11).toInt();
-        writeEEPROMint(ADDR_LUMIN_HIGH, lumin_high);
+        writeEEPROMint(ADDR_LUMIN_HIGH, command.substring(11).toInt());
         //Serial.println("LUMIN_HIGH set to " + String(lumin_high));
     }
-    else if (command.startsWith("CLOCK=")){
-        String time = command.substring(6);
-        int hour = time.substring(0,2).toInt();
-        int min = time.substring(3,5).toInt();
-        int sec = time.substring(6,8).toInt();
-        int currentYear, currentMonth, currentDay;
-        calculateDate(&currentDay, &currentMonth, &currentYear);
-        clock.adjust(DateTime(currentYear+2000, currentMonth, currentDay, hour, min, sec));
+    else if (command.startsWith("TEMP_AIR=")){
+        writeEEPROMint(ADDR_TEMP_AIR, command.substring(9).toInt() != 0);
+    }
+    else if (command.startsWith("MIN_TEMP_AIR=")){
+        writeEEPROMint(ADDR_MIN_TEMP_AIR, command.substring(13).toInt());
+    }
+    else if (command.startsWith("MAX_TEMP_AIR=")){
+        writeEEPROMint(ADDR_MAX_TEMP_AIR, command.substring(13).toInt());
+    }
+    else if (command.startsWith("HYGR=")){
+        writeEEPROMint(ADDR_HYGR,command.substring(5).toInt() !=0);
+    }
+    else if (command.startsWith("HYGR_MINT=")){
+        writeEEPROMint(ADDR_HYGR_MINT, command.substring(9).toInt());
+    }
+    else if(command.startsWith("HYGR_MAXT=")){
+        writeEEPROMint(ADDR_HYGR_MAXT, command.substring(9).toInt());
+    }
+    else if (command.startsWith("PRESSURE=")){
+        writeEEPROMint(ADDR_PRESSURE,command.substring(9).toInt()!=0);
+    }
+    else if (command.startsWith("PRESSURE_MIN=")){
+        writeEEPROMint(ADDR_PRESSURE_MIN,command.substring(13).toInt());
+    }
+    else if (command.startsWith("PRESSURE_MAX=")){
+        writeEEPROMint(ADDR_PRESSURE_MAX, command.substring(13).toInt());
+    }
+   else if (command.startsWith("CLOCK=")){
+    int currentDay,currentMonth,currentYear;
+    calculateDate(&currentDay, &currentMonth, &currentYear);
+    clock.adjust(DateTime(currentYear + 2000, currentMonth, currentDay,command.substring(6, 8).toInt(), command.substring(9, 11).toInt(), command.substring(12, 14).toInt()));
     }
     else if (command.startsWith("DATE=")){
-        String date = command.substring(5);
-        int day = date.substring(0,2).toInt();
-        int month = date.substring(3,5).toInt();
-        int year = date.substring(6,10).toInt();
-        int currentHour, currentMinute, currentSecond;
-        currentHour = clock.now().hour();
-        currentMinute = clock.now().minute();
-        currentSecond = clock.now().second();
-        clock.adjust(DateTime(year, month, day, currentHour, currentMinute, currentSecond));
+        DateTime now = clock.now();
+        clock.adjust(DateTime(command.substring(9, 13).toInt(), command.substring(6, 8).toInt(), command.substring(3, 5).toInt(),now.hour(), now.minute(), now.second()));
     }
     else if (command == "RESET") {
         resetToDefaults();
