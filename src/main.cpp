@@ -26,7 +26,6 @@
 #define ADDR_FILE_MAX_SIZE_VALUE 40
 #define ADDR_TIMEOUT_VALUE 44
 
-
 #define RED_BUTTON 2
 #define GREEN_BUTTON 3
 #define BUTTON_CHECK_INTERVAL 100000UL  // 100ms in microseconds
@@ -57,7 +56,6 @@ void resetToDefaults();
 void saveDataToSD();
 void flashLedError(int red, int green, int blue, int duration1, int duration2);
 void checkError();
-void calculateDate(int* day, int* month, int* year);
 
 void setup() {
     Serial.begin(9600);
