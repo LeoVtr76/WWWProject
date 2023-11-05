@@ -28,13 +28,12 @@
 #define ADDR_TIMEOUT_VALUE 44
 
 
-#define NUM_LEDS 1
 #define RED_BUTTON 2
 #define GREEN_BUTTON 3
 #define BUTTON_CHECK_INTERVAL 100000UL  // 100ms in microseconds
 #define LIGHT_SENSOR_PIN A0
 enum Mode {CONFIG, STANDARD, ECO, MAINTENANCE};
-ChainableLED leds(5, 6, NUM_LEDS);
+ChainableLED leds(5, 6, 1);
 Adafruit_BME280 bme;
 RTC_DS1307 clock;
 //SdFat SD;
@@ -160,7 +159,7 @@ void checkButton() {
 //gestion des capteurs et des erreurs
 void saveDataToSD() {
     bool lumin = (readEEPROMint(ADDR_LUMIN));
-    int day, month, year;
+    //int day, month, year;
     DateTime now = clock.now();
     byte day = now.day();
     byte month = now.month();
