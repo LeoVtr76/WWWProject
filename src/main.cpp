@@ -5,7 +5,6 @@
 #include <SD.h>
 #include <EEPROM.h>
 #include <Adafruit_BME280.h>
-#include <Arduino.h>
 
 #define ADDR_LOG_INTERVAL 0
 #define ADDR_FILE_MAX_SIZE 4 
@@ -54,7 +53,7 @@ void buttonPressed();
 void checkButton();
 void handleSerialCommand(String command);
 void getData();
-void flashLedError(int red, int green, int blue, int duration1, int duration2);
+void flashLedError(byte red, byte green, byte blue, int duration1, int duration2);
 void checkError();
 
 void setup() {
@@ -101,11 +100,9 @@ void loop() {
             break;
     }
     checkError();
-    if(currentMode != MAINTENANCE && currentMode != CONFIG){
-        if (millis() - lastGetTime >= logInterval * 60000) {
-            getData();
-            lastGetTime = millis();
-        }
+    if (millis() - lastGetTime >= logInterval * 60000) {
+        getData();
+        lastGetTime = millis();
     }
 }
 void buttonPressed() {
@@ -131,34 +128,12 @@ void checkButton() {
 void getData() {
     bool lumin = (readEEPROMint(ADDR_LUMIN));
     //int day, month, year;
-    DateTime now = clock.now();
-    byte day = now.day();
-    byte month = now.month();
-    byte year = now.year() % 100;
-    char filename[15];
-    File dataFile;
-    bool fileOpened = false;
     unsigned long startTime;
-    int lightLevel;
+    unsigned int lightLevel;
     float voltage;
     String luminosityDescription;
 
-    while (!fileOpened) {
-        snprintf(filename, sizeof(filename), "%02d%02d%02d_%d.log", year, month, day, recordCounter);
-        if (SD.exists(filename)) {
-            dataFile = SD.open(filename, FILE_READ);
-            int fileSize = dataFile.size();
-            dataFile.close();
-            
-            if(fileSize <= (2048 - 100)) {
-                fileOpened = true;
-            } else {
-                recordCounter++;
-            }
-        } else {
-            fileOpened = true;
-        }
-    }
+    
     startTime = millis();
     float temperature, humidity, pressure;
     while ((millis() - startTime <= 3000)){
@@ -183,8 +158,8 @@ void getData() {
             lightLevel = -1;
             voltage = NAN;
         }
-        int luminLow = readEEPROMint(ADDR_LUMIN_LOW);
-        int luminHigh = readEEPROMint(ADDR_LUMIN_HIGH);
+        unsigned int luminLow = readEEPROMint(ADDR_LUMIN_LOW);
+        unsigned int luminHigh = readEEPROMint(ADDR_LUMIN_HIGH);
         if (lightLevel < luminLow && lightLevel >= 0) {
             luminosityDescription = "faible";
         } else if(lightLevel > luminHigh && lightLevel < 1000) {
@@ -203,7 +178,29 @@ void getData() {
         Serial.println(luminosityDescription);
     }
     
-    if(currentMode == ECO || currentMode == STANDARD){
+    if(currentMode != MAINTENANCE && currentMode != CONFIG){
+        DateTime now = clock.now();
+        byte day = now.day();
+        byte month = now.month();
+        byte year = now.year() % 100;
+        char filename[15];
+        File dataFile;
+        bool fileOpened = false;
+        while (!fileOpened) {
+            snprintf(filename, sizeof(filename), "%02d%02d%02d_%d.log", year, month, day, recordCounter);
+            if (SD.exists(filename)) {
+                dataFile = SD.open(filename, FILE_READ);
+                int fileSize = dataFile.size();
+                dataFile.close();
+                if(fileSize <= (2048 - 100)) {
+                    fileOpened = true;
+                } else {
+                    recordCounter++;
+                }
+            } else {
+                fileOpened = true;
+            }
+        }
         dataFile = SD.open(filename, FILE_WRITE);
         if (dataFile) {
             dataFile.print(clock.now().hour()); dataFile.print(":"); dataFile.print(clock.now().minute()); dataFile.print(" -> ");
@@ -217,7 +214,7 @@ void getData() {
     
 }
 
-void flashLedError(int red, int green, int blue, int duration1, int duration2) {
+void flashLedError(byte red, byte green, byte blue, int duration1, int duration2) {
     for (byte i = 0; i < 5; i++) {
         leds.setColorRGB(0, red, green, blue);  
         delay(duration1 * 500);  
@@ -257,13 +254,6 @@ void checkError() {
     //  }
 
 }
-void calculateDate(int* day, int* month, int* year) {
-    DateTime now = clock.now();
-    *day = now.day();
-    *month = now.month();
-    *year = now.year() % 100;
-}
-
 void handleSerialCommand(String command) {
     if (command.startsWith("LOG_INTERVAL=")) {
         EEPROM.put(ADDR_LOG_INTERVAL_VALUE, command.substring(13).toInt());
@@ -316,8 +306,8 @@ void handleSerialCommand(String command) {
         EEPROM.put(ADDR_PRESSURE_MAX, command.substring(13).toInt());
     }
    else if (command.startsWith("CLOCK=")){
-    DateTime now = clock.now();
-    clock.adjust(DateTime(now.year() + 2000, now.month(), now.day(),command.substring(6, 8).toInt(), command.substring(9, 11).toInt(), command.substring(12, 14).toInt()));
+        DateTime now = clock.now();
+        clock.adjust(DateTime(now.year(), now.month(), now.day(),command.substring(6, 8).toInt(), command.substring(9, 11).toInt(), command.substring(12, 14).toInt()));
     }
     else if (command.startsWith("DATE=")){
         DateTime now = clock.now();
