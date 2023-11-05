@@ -26,6 +26,7 @@
 #define ADDR_FILE_MAX_SIZE_VALUE 40
 #define ADDR_TIMEOUT_VALUE 44
 
+
 #define RED_BUTTON 2
 #define GREEN_BUTTON 3
 #define BUTTON_CHECK_INTERVAL 100000UL  // 100ms in microseconds
@@ -52,8 +53,7 @@ void initializeEEPROMDefaults();
 void buttonPressed();
 void checkButton();
 void handleSerialCommand(String command);
-void resetToDefaults();
-void saveDataToSD();
+void getData();
 void flashLedError(int red, int green, int blue, int duration1, int duration2);
 void checkError();
 
@@ -102,8 +102,8 @@ void loop() {
     }
     checkError();
     if(currentMode != MAINTENANCE && currentMode != CONFIG){
-        if (millis() - lastGetTime >= logInterval * 100) { //REMETTRE *60000 pour mettre des minutes en entrées
-            saveDataToSD();
+        if (millis() - lastGetTime >= logInterval * 60000) {
+            getData();
             lastGetTime = millis();
         }
     }
@@ -128,7 +128,7 @@ void checkButton() {
 }
 
 //gestion des capteurs et des erreurs
-void saveDataToSD() {
+void getData() {
     bool lumin = (readEEPROMint(ADDR_LUMIN));
     //int day, month, year;
     DateTime now = clock.now();
@@ -203,16 +203,18 @@ void saveDataToSD() {
         Serial.println(luminosityDescription);
     }
     
-
-    dataFile = SD.open(filename, FILE_WRITE);
-    if (dataFile) {
-        dataFile.print(clock.now().hour()); dataFile.print(":"); dataFile.print(clock.now().minute()); dataFile.print(" -> ");
-        dataFile.print("Temperature: "); dataFile.print(isnan(temperature) ? "Na" : String(temperature)); dataFile.print("C; ");
-        dataFile.print("Humidity: "); dataFile.print(isnan(humidity) ? "Na" : String(humidity)); dataFile.print("%; ");
-        dataFile.print("Pressure: "); dataFile.print(isnan(pressure) ? "Na" : String(pressure)); dataFile.print("Pa; ");
-        dataFile.print("Luminosity: "); dataFile.println(luminosityDescription);
-        dataFile.close(); 
+    if(currentMode == ECO || currentMode == STANDARD){
+        dataFile = SD.open(filename, FILE_WRITE);
+        if (dataFile) {
+            dataFile.print(clock.now().hour()); dataFile.print(":"); dataFile.print(clock.now().minute()); dataFile.print(" -> ");
+            dataFile.print("Temperature: "); dataFile.print(isnan(temperature) ? "Na" : String(temperature)); dataFile.print("C; ");
+            dataFile.print("Humidity: "); dataFile.print(isnan(humidity) ? "Na" : String(humidity)); dataFile.print("%; ");
+            dataFile.print("Pressure: "); dataFile.print(isnan(pressure) ? "Na" : String(pressure)); dataFile.print("Pa; ");
+            dataFile.print("Luminosity: "); dataFile.println(luminosityDescription);
+            dataFile.close(); 
+        }
     }
+    
 }
 
 void flashLedError(int red, int green, int blue, int duration1, int duration2) {
@@ -322,7 +324,7 @@ void handleSerialCommand(String command) {
         clock.adjust(DateTime(command.substring(9, 13).toInt(), command.substring(6, 8).toInt(), command.substring(3, 5).toInt(),now.hour(), now.minute(), now.second()));
     }
     else if (command == "RESET") {
-        resetToDefaults();
+        initializeEEPROMDefaults();
     }
     else if (command == "VERSION") {
         Serial.println("1.0 , 1");
@@ -332,9 +334,6 @@ void handleSerialCommand(String command) {
     }
 }
 //gestion EEPROM
-void resetToDefaults() {
-    initializeEEPROMDefaults();
-}
 
 int readEEPROMint(int address) {
     int value;
