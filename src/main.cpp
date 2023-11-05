@@ -31,7 +31,7 @@
 #define NUM_LEDS 1
 #define RED_BUTTON 2
 #define GREEN_BUTTON 3
-#define BUTTON_CHECK_INTERVAL 100000  // 100ms in microseconds
+#define BUTTON_CHECK_INTERVAL 100000UL  // 100ms in microseconds
 #define LIGHT_SENSOR_PIN A0
 enum Mode {CONFIG, STANDARD, ECO, MAINTENANCE};
 ChainableLED leds(5, 6, NUM_LEDS);
@@ -50,7 +50,6 @@ bool error = false;
 
 //Prototype
 void changeMode(Mode mode);
-void writeEEPROMint(int address, int value);
 int readEEPROMint(int address);
 void initializeEEPROMDefaults();
 // void ecoMode();
@@ -156,13 +155,16 @@ void checkButton() {
         } else if (digitalRead(GREEN_BUTTON) == LOW && currentMode == STANDARD) {
             changeMode(ECO);
         }
-    }
+    }  
 }
 //gestion des capteurs et des erreurs
 void saveDataToSD() {
     bool lumin = (readEEPROMint(ADDR_LUMIN));
     int day, month, year;
-    calculateDate(&day, &month, &year);
+    DateTime now = clock.now();
+    byte day = now.day();
+    byte month = now.month();
+    byte year = now.year() % 100;
     char filename[15];
     File dataFile;
     bool fileOpened = false;
@@ -250,7 +252,7 @@ void flashLedError(int red, int green, int blue, int duration1, int duration2) {
         leds.setColorRGB(0, 255, 0, 0);  // Rouge
         delay(duration2 * 500);
     }
-    leds.setColorRGB(0, 0, 0, 0);  // Éteindre la LED après la séquence
+    //leds.setColorRGB(0, 0, 0, 0);  // Éteindre la LED après la séquence
 }
 void changeMode(Mode newMode) {
   currentMode = newMode;
@@ -298,59 +300,58 @@ void calculateDate(int* day, int* month, int* year) {
 
 void handleSerialCommand(String command) {
     if (command.startsWith("LOG_INTERVAL=")) {
-        writeEEPROMint(ADDR_LOG_INTERVAL_VALUE, command.substring(13).toInt());
+        EEPROM.put(ADDR_LOG_INTERVAL_VALUE, command.substring(13).toInt());
         //Serial.println("LOG_INTERVAL set to " + String(logInterval));
     }
     else if (command.startsWith("FILE_MAX_SIZE=")) {
-        writeEEPROMint(ADDR_FILE_MAX_SIZE_VALUE, command.substring(13).toInt());
+        EEPROM.put(ADDR_FILE_MAX_SIZE_VALUE, command.substring(13).toInt());
         //Serial.println("FILE_MAX_SIZE set to " + String(fileSize));
     }
     else if (command.startsWith("TIMEOUT=")) {
-        writeEEPROMint(ADDR_TIMEOUT_VALUE, command.substring(8).toInt());
+        EEPROM.put(ADDR_TIMEOUT_VALUE, command.substring(8).toInt());
         //Serial.println("TIMEOUT set to " + String(timeout));
     }
     else if (command.startsWith("LUMIN=")){
-        writeEEPROMint(ADDR_LUMIN, command.substring(6).toInt() != 0);
+        EEPROM.put(ADDR_LUMIN, command.substring(6).toInt() != 0);
     }
     else if (command.startsWith("LUMIN_LOW=")){
-        writeEEPROMint(ADDR_LUMIN_LOW, command.substring(10).toInt());
+        EEPROM.put(ADDR_LUMIN_LOW, command.substring(10).toInt());
         //Serial.println("LUMIN_LOW set to " + String(lumin_low));
     }
     else if (command.startsWith("LUMIN_HIGH=")){
-        writeEEPROMint(ADDR_LUMIN_HIGH, command.substring(11).toInt());
+        EEPROM.put(ADDR_LUMIN_HIGH, command.substring(11).toInt());
         //Serial.println("LUMIN_HIGH set to " + String(lumin_high));
     }
     else if (command.startsWith("TEMP_AIR=")){
-        writeEEPROMint(ADDR_TEMP_AIR, command.substring(9).toInt() != 0);
+        EEPROM.put(ADDR_TEMP_AIR, command.substring(9).toInt() != 0);
     }
     else if (command.startsWith("MIN_TEMP_AIR=")){
-        writeEEPROMint(ADDR_MIN_TEMP_AIR, command.substring(13).toInt());
+        EEPROM.put(ADDR_MIN_TEMP_AIR, command.substring(13).toInt());
     }
     else if (command.startsWith("MAX_TEMP_AIR=")){
-        writeEEPROMint(ADDR_MAX_TEMP_AIR, command.substring(13).toInt());
+        EEPROM.put(ADDR_MAX_TEMP_AIR, command.substring(13).toInt());
     }
     else if (command.startsWith("HYGR=")){
-        writeEEPROMint(ADDR_HYGR,command.substring(5).toInt() !=0);
+        EEPROM.put(ADDR_HYGR,command.substring(5).toInt() !=0);
     }
     else if (command.startsWith("HYGR_MINT=")){
-        writeEEPROMint(ADDR_HYGR_MINT, command.substring(9).toInt());
+        EEPROM.put(ADDR_HYGR_MINT, command.substring(9).toInt());
     }
     else if(command.startsWith("HYGR_MAXT=")){
-        writeEEPROMint(ADDR_HYGR_MAXT, command.substring(9).toInt());
+        EEPROM.put(ADDR_HYGR_MAXT, command.substring(9).toInt());
     }
     else if (command.startsWith("PRESSURE=")){
-        writeEEPROMint(ADDR_PRESSURE,command.substring(9).toInt()!=0);
+        EEPROM.put(ADDR_PRESSURE,command.substring(9).toInt()!=0);
     }
     else if (command.startsWith("PRESSURE_MIN=")){
-        writeEEPROMint(ADDR_PRESSURE_MIN,command.substring(13).toInt());
+        EEPROM.put(ADDR_PRESSURE_MIN,command.substring(13).toInt());
     }
     else if (command.startsWith("PRESSURE_MAX=")){
-        writeEEPROMint(ADDR_PRESSURE_MAX, command.substring(13).toInt());
+        EEPROM.put(ADDR_PRESSURE_MAX, command.substring(13).toInt());
     }
    else if (command.startsWith("CLOCK=")){
-    int currentDay,currentMonth,currentYear;
-    calculateDate(&currentDay, &currentMonth, &currentYear);
-    clock.adjust(DateTime(currentYear + 2000, currentMonth, currentDay,command.substring(6, 8).toInt(), command.substring(9, 11).toInt(), command.substring(12, 14).toInt()));
+    DateTime now = clock.now();
+    clock.adjust(DateTime(now.year() + 2000, now.month(), now.day(),command.substring(6, 8).toInt(), command.substring(9, 11).toInt(), command.substring(12, 14).toInt()));
     }
     else if (command.startsWith("DATE=")){
         DateTime now = clock.now();
@@ -358,25 +359,17 @@ void handleSerialCommand(String command) {
     }
     else if (command == "RESET") {
         resetToDefaults();
-        //Serial.println("All parameters reset to default values.");
     }
     else if (command == "VERSION") {
-        Serial.println("1.0.0, 1");
+        Serial.println("1.0 , 1");
     }
     else {
-        Serial.println("Unknown command.");
+        Serial.println("Unknown");
     }
 }
 //gestion EEPROM
 void resetToDefaults() {
-    writeEEPROMint(ADDR_LOG_INTERVAL_VALUE, 10);
-    writeEEPROMint(ADDR_FILE_MAX_SIZE_VALUE, 4096);
-    writeEEPROMint(ADDR_TIMEOUT_VALUE, 30);
-}
-
-
-void writeEEPROMint(int address, int value) {
-    EEPROM.put(address, value);
+    initializeEEPROMDefaults();
 }
 
 int readEEPROMint(int address) {
@@ -385,19 +378,19 @@ int readEEPROMint(int address) {
     return value;
 }
 void initializeEEPROMDefaults() {
-    writeEEPROMint(ADDR_LUMIN, 1);
-    writeEEPROMint(ADDR_LUMIN_LOW, 200);
-    writeEEPROMint(ADDR_LUMIN_HIGH, 700);
-    writeEEPROMint(ADDR_TEMP_AIR, 1);
-    writeEEPROMint(ADDR_MIN_TEMP_AIR, -10);
-    writeEEPROMint(ADDR_MAX_TEMP_AIR, 60);
-    writeEEPROMint(ADDR_HYGR, 1);
-    writeEEPROMint(ADDR_HYGR_MINT, 0);
-    writeEEPROMint(ADDR_HYGR_MAXT, 50);
-    writeEEPROMint(ADDR_PRESSURE, 1);
-    writeEEPROMint(ADDR_PRESSURE_MIN, 850);
-    writeEEPROMint(ADDR_PRESSURE_MAX, 1080);
-    writeEEPROMint(ADDR_LOG_INTERVAL_VALUE, 10);
-    writeEEPROMint(ADDR_FILE_MAX_SIZE_VALUE, 4096);
-    writeEEPROMint(ADDR_TIMEOUT_VALUE, 30);
+    EEPROM.put(ADDR_LUMIN, 1);
+    EEPROM.put(ADDR_LUMIN_LOW, 200);
+    EEPROM.put(ADDR_LUMIN_HIGH, 700);
+    EEPROM.put(ADDR_TEMP_AIR, 1);
+    EEPROM.put(ADDR_MIN_TEMP_AIR, -10);
+    EEPROM.put(ADDR_MAX_TEMP_AIR, 60);
+    EEPROM.put(ADDR_HYGR, 1);
+    EEPROM.put(ADDR_HYGR_MINT, 0);
+    EEPROM.put(ADDR_HYGR_MAXT, 50);
+    EEPROM.put(ADDR_PRESSURE, 1);
+    EEPROM.put(ADDR_PRESSURE_MIN, 850);
+    EEPROM.put(ADDR_PRESSURE_MAX, 1080);
+    EEPROM.put(ADDR_LOG_INTERVAL_VALUE, 10);
+    EEPROM.put(ADDR_FILE_MAX_SIZE_VALUE, 4096);
+    EEPROM.put(ADDR_TIMEOUT_VALUE, 30);
 }
