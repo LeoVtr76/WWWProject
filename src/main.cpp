@@ -1,10 +1,10 @@
-#include <ChainableLED.h>
+#include <leds.h>
 #include <TimerOne.h>
 #include <RTClib.h>
 #include <Wire.h>
 #include <SD.h>
 #include <EEPROM.h>
-#include <Adafruit_BME280.h>
+#include <sensors.h>
 
 #define ADDR_LUMIN 12
 #define ADDR_LUMIN_LOW 14
@@ -28,8 +28,8 @@
 #define BUTTON_CHECK_INTERVAL 100000  // 100ms in microseconds
 #define LIGHT_SENSOR_PIN A0
 enum Mode {CONFIG, STANDARD, ECO, MAINTENANCE};
-ChainableLED leds(5, 6, 1);
-Adafruit_BME280 bme;
+Leds leds(5, 6, 1);
+Sensors bme;
 RTC_DS1307 clock;
 SdVolume volume;
 Sd2Card card;
@@ -74,7 +74,7 @@ void setup() {
 void loop() {
     switch (currentMode) {
         case CONFIG:
-            if (!error) leds.setColorRGB(0, 255, 110, 0);
+            if (!error) leds.setColorRGB( 255, 110, 0);
             if (Serial.available()) {
                 String command = Serial.readStringUntil('\n');
                 handleSerialCommand(command);
@@ -82,14 +82,14 @@ void loop() {
             if (millis() >= 1800000) changeMode(STANDARD); // Pour 30 min : 1800000
             break;
         case STANDARD:
-            if(!error)leds.setColorRGB(0, 0, 255, 0);
+            if(!error)leds.setColorRGB(0, 255, 0);
             break;
         case ECO:
-            if(!error)leds.setColorRGB(0, 0, 0, 255);
+            if(!error)leds.setColorRGB(0, 0, 255);
             logInterval *= 2;
             break;
         case MAINTENANCE:
-            if(!error)leds.setColorRGB(0, 255, 30, 0);
+            if(!error)leds.setColorRGB(255, 30, 0);
             //SD.end();
             break;
     }
@@ -142,7 +142,6 @@ void getData() {
     EEPROM.get(ADDR_TIMEOUT_VALUE, timeout);
     unsigned long startGet = millis();
     while((millis() - startGet <= timeout * 1000)){
-        Serial.println("b");
         temperature = isTemp ? bme.readTemperature() : NAN;
         humidity = isHum ? bme.readHumidity() : NAN;
         pressure = isPress ? bme.readPressure() : NAN;
@@ -151,7 +150,6 @@ void getData() {
             voltage = lightLevel * (5.0/1023.0);
             if(voltage < 1000 && bme.begin(0x76)) break;
             delay(100);
-            Serial.println("C");
         }
         else{
             lightLevel = -1;
@@ -169,21 +167,26 @@ void getData() {
         unsigned short luminLow, luminHigh;
         EEPROM.get(ADDR_LUMIN_LOW, luminHigh);
         EEPROM.get(ADDR_LUMIN_HIGH, luminHigh);
-        if (lightLevel < luminLow && lightLevel >= 0) {
-            luminosityDescription = "faible";
-        } else if(lightLevel > luminHigh && lightLevel < 1000) {
-            luminosityDescription = "forte";
-        }else {
-            luminosityDescription = String(lightLevel);
+        if(!isnan(voltage)){
+          if (lightLevel < luminLow && lightLevel >= 0) {
+              luminosityDescription = "faible";
+          } else if(lightLevel > luminHigh && lightLevel < 1000) {
+              luminosityDescription = "forte";
+          }else {
+              luminosityDescription = String(lightLevel);
+          }
+        }
+        else {
+          luminosityDescription = "Na";
         }
     }
     else {
         luminosityDescription = "Na";
     }
     if(currentMode == MAINTENANCE){
-        Serial.print("T : ");Serial.print(isnan(temperature) ? "Na " : String(temperature)); Serial.print(isnan(temperature) ? "C\n" : "\n");
-        Serial.print("H : ");Serial.print(isnan(humidity) ? "Na " : String(humidity)); Serial.print(isnan(humidity) ? "%\n" : "\n");
-        Serial.print("P : ");Serial.print(isnan(pressure) ? "Na " : String(pressure)); Serial.print(isnan(pressure) ? "Pa\n" : "\n");
+        Serial.print("T : ");Serial.print(isnan(temperature) ? "Na " : String(temperature)); Serial.print(isnan(temperature) ? "\n" : " C\n");
+        Serial.print("H : ");Serial.print(isnan(humidity) ? "Na " : String(humidity)); Serial.print(isnan(humidity) ? "\n" : " %\n");
+        Serial.print("P : ");Serial.print(isnan(pressure) ? "Na " : String(pressure)); Serial.print(isnan(pressure) ? "\n" : " Pa\n");
         Serial.print("L : ");Serial.println(luminosityDescription);
     }
         
@@ -213,9 +216,9 @@ void getData() {
         dataFile = SD.open(filename, FILE_WRITE);
         if (dataFile) {
             dataFile.print(clock.now().hour()); dataFile.print(":"); dataFile.print(clock.now().minute()); dataFile.print(" -> ");
-            dataFile.print("T : "); dataFile.print(isnan(temperature) ? "Na" : String(temperature)); dataFile.print(isnan(temperature) ? "C " : "");
-            dataFile.print("H : "); dataFile.print(isnan(humidity) ? "Na" : String(humidity)); dataFile.print(isnan(humidity) ? "% " : "");
-            dataFile.print("P : "); dataFile.print(isnan(pressure) ? "Na" : String(pressure)); dataFile.print(isnan(pressure) ? "Pa " : "");
+            dataFile.print("T : "); dataFile.print(isnan(temperature) ? " Na" : String(temperature)); dataFile.print(isnan(temperature) ? "" : " C ");
+            dataFile.print("H : "); dataFile.print(isnan(humidity) ? " Na" : String(humidity)); dataFile.print(isnan(humidity) ? "" : " %");
+            dataFile.print("P : "); dataFile.print(isnan(pressure) ? " Na" : String(pressure)); dataFile.print(isnan(pressure) ? "" : " Pa ");
             dataFile.print("L : "); dataFile.println(luminosityDescription);
             dataFile.close(); 
         }
@@ -224,19 +227,19 @@ void getData() {
 
 void flashLedError(byte red, byte green, byte blue, int duration1, int duration2) {
     for (byte i = 0; i < 5; i++) {
-        leds.setColorRGB(0, red, green, blue);  
+        leds.setColorRGB(red, green, blue);  
         delay(duration1 * 500);  
-        leds.setColorRGB(0, 255, 0, 0);
+        leds.setColorRGB(255, 0, 0);
         delay(duration2 * 500);
     }
 }
 void changeMode(Mode newMode) {
     currentMode = newMode;
     switch (currentMode) {
-    case CONFIG: leds.setColorRGB(0, 255, 110, 0); break;
-    case STANDARD: leds.setColorRGB(0, 0, 255, 0); break;
-    case ECO: leds.setColorRGB(0, 0, 0, 255); break;
-    case MAINTENANCE: leds.setColorRGB(0, 255, 30, 0); break;
+    case CONFIG: leds.setColorRGB(255, 110, 0); break;
+    case STANDARD: leds.setColorRGB(0, 255, 0); break;
+    case ECO: leds.setColorRGB(0, 0, 255); break;
+    case MAINTENANCE: leds.setColorRGB(255, 30, 0); break;
   }
 }
 void handleSerialCommand(String command) {
