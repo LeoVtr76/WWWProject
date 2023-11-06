@@ -2,15 +2,10 @@
 #include <TimerOne.h>
 #include <RTClib.h>
 #include <Wire.h>
-// #include <SdFat.h>
-//#include <SDI>
 #include <SD.h>
 #include <EEPROM.h>
 #include <Adafruit_BME280.h>
 
-#define ADDR_LOG_INTERVAL 0
-#define ADDR_FILE_MAX_SIZE 4 
-#define ADDR_TIMEOUT 8
 #define ADDR_LUMIN 12
 #define ADDR_LUMIN_LOW 14
 #define ADDR_LUMIN_HIGH 16
@@ -28,16 +23,14 @@
 #define ADDR_TIMEOUT_VALUE 44
 
 
-#define NUM_LEDS 1
 #define RED_BUTTON 2
 #define GREEN_BUTTON 3
 #define BUTTON_CHECK_INTERVAL 100000  // 100ms in microseconds
 #define LIGHT_SENSOR_PIN A0
 enum Mode {CONFIG, STANDARD, ECO, MAINTENANCE};
-ChainableLED leds(5, 6, NUM_LEDS);
+ChainableLED leds(5, 6, 1);
 Adafruit_BME280 bme;
 RTC_DS1307 clock;
-//SdFat SD;
 SdVolume volume;
 Sd2Card card;
 byte recordCounter = 1;
@@ -46,77 +39,78 @@ Mode currentMode;
 Mode lastMode;
 volatile bool isButtonPressed = false;
 byte logInterval;
-bool errorFlag = false;
+bool error = false;
 
 //Prototype
 void changeMode(Mode mode);
-void writeEEPROMint(int address, int value);
-int readEEPROMint(int address);
 void initializeEEPROMDefaults();
-void ecoMode();
-void standardMode();
-void configMode();
-void maintenanceMode();
 void buttonPressed();
 void checkButton();
 void handleSerialCommand(String command);
-void resetToDefaults();
-void saveDataToSD();
-void flashLedError(int red, int green, int blue, int duration1, int duration2);
-void checkError();
-void calculateDate(int* day, int* month, int* year);
-void printDateTime();
-
+void getData();
+void flashLedError(byte red, byte green, byte blue, int duration1, int duration2);
 
 void setup() {
-    Serial.begin(9600);
-    if (readEEPROMint(ADDR_LOG_INTERVAL_VALUE) == 0xFF) {
+    unsigned short logIntervalValue;
+    EEPROM.get(ADDR_LOG_INTERVAL_VALUE, logIntervalValue); 
+    if (logIntervalValue == 0xFF) {
         initializeEEPROMDefaults();
-        //Serial.println(F("EEPROM value initiate"));
     }
     pinMode(RED_BUTTON, INPUT_PULLUP);
     pinMode(GREEN_BUTTON, INPUT_PULLUP);
     pinMode(LIGHT_SENSOR_PIN, INPUT);
-    while (!Serial && millis() > 5000);
-    if (!clock.begin()) {
-        //Serial.println(F("Couldn't find RTC"));
-    } else {
-        if (!clock.isrunning()) {
-            clock.adjust(DateTime(2023, 10, 23, 11, 48, 30));
-        }
-        printDateTime();
-    }
     currentMode = !digitalRead(RED_BUTTON) ? CONFIG  : STANDARD;
     attachInterrupt(digitalPinToInterrupt(RED_BUTTON), buttonPressed, FALLING);
     attachInterrupt(digitalPinToInterrupt(GREEN_BUTTON), buttonPressed, FALLING);
     Timer1.initialize(BUTTON_CHECK_INTERVAL);
     Timer1.attachInterrupt(checkButton);
 }
-void printDateTime(){
-    Serial.print(clock.now().day());
-    Serial.print(F("/"));
-    Serial.print(clock.now().month());
-    Serial.print(F("/"));
-    Serial.print(clock.now().year());
-    Serial.print(F(" "));
-    Serial.print(clock.now().hour());
-    Serial.print(F(":"));
-    Serial.print(clock.now().minute());
-}
 void loop() {
     switch (currentMode) {
-        case CONFIG: configMode(); break;
-        case STANDARD: standardMode(); break;
-        case ECO: ecoMode(); break;
-        case MAINTENANCE: maintenanceMode(); break;
+        case CONFIG:
+            if (!error) leds.setColorRGB(0, 255, 110, 0);
+            Serial.begin(9600);
+            if (Serial.available()) {
+                String command = Serial.readStringUntil('\n');
+                handleSerialCommand(command);
+            }
+            if (millis() >= 1800000) changeMode(STANDARD); // Pour 30 min : 1800000
+            break;
+        case STANDARD:
+            if(!error)leds.setColorRGB(0, 0, 255, 0);
+            unsigned int logInterval;
+            EEPROM.get(ADDR_LOG_INTERVAL_VALUE, logInterval);
+            break;
+        case ECO:
+            if(!error)leds.setColorRGB(0, 0, 0, 255);
+            EEPROM.get(ADDR_LOG_INTERVAL_VALUE, logInterval);
+            logInterval *= 2;
+            break;
+        case MAINTENANCE:
+            if(!error)leds.setColorRGB(0, 255, 30, 0);
+            //SD.end();
+            break;
     }
-    checkError();
-    if(currentMode != MAINTENANCE && currentMode != CONFIG){
-        if (millis() - lastGetTime >= logInterval * 100) { //REMETTRE *60000 pour mettre des minutes en entrées
-            saveDataToSD();
-            lastGetTime = millis();
-        }
+    error = false;
+    if(!clock.begin()){
+        flashLedError(255, 0, 255, 1, 1);
+        error = true;
     }
+    if(!SD.begin(4)){
+        flashLedError(255, 255, 255, 2, 1);
+        error = true;
+    }
+    if (!bme.begin(0x76)){
+        flashLedError(0,255,255,1,1);
+        error = true;
+    }
+    getData();
+    //Serial.println(volume.blocksPerCluster()*volume.clusterCount() - volume.clusterCount() * 512);
+    //  if (SD.vol()->sectorsPerCluster() *512L * SD.vol()->freeClusterCount() < 7 * 1024 * 1024 * 1024){
+    //     Serial.println("Chef ya plus de place");
+    //     flashLedError(255,255,255,1,1);
+    //     error = true;
+    //  }
 }
 void buttonPressed() {
   buttonPressTime = millis();
@@ -134,78 +128,32 @@ void checkButton() {
         } else if (digitalRead(GREEN_BUTTON) == LOW && currentMode == STANDARD) {
             changeMode(ECO);
         }
-    }
-}
-//gestion des modes
-void ecoMode() {
-    if(!errorFlag)leds.setColorRGB(0, 0, 0, 255);
-    logInterval = readEEPROMint(ADDR_LOG_INTERVAL_VALUE);
-    logInterval *= 2;
-}
-
-void standardMode() {
-    if(!errorFlag)leds.setColorRGB(0, 0, 255, 0);
-    logInterval = readEEPROMint(ADDR_LOG_INTERVAL_VALUE);
-    // Enregistre données sur carte SD jusqu'à ce que le fichier soit full (2ko), il écrit sur un nouveau fichier
-    // Pas compris la 3e instruction
-}
-
-void configMode() {
-    if (!errorFlag) leds.setColorRGB(0, 255, 110, 0);
-    if (Serial.available()) {
-        String command = Serial.readStringUntil('\n');
-        handleSerialCommand(command);
-    }
-    if (millis() >= 1800000) changeMode(STANDARD); // Pour 30 min : 1800000
-    // Modifier paramètres EEPROM ?
-    // Formatter disque dur ? en 4k TUA
-    // Réinitialiser paramètres
-    // Interface pour taper des commandes
-    // Affiche version + numéro de lot
-}
-
-void maintenanceMode() {
-    if(!errorFlag)leds.setColorRGB(0, 255, 30, 0);
-    // Pas de sauvegarde de carte sd
-    // récup données via port série
-    // permet de changer la carte sd
+    }  
 }
 
 //gestion des capteurs et des erreurs
-void saveDataToSD() {
-    bool lumin = (readEEPROMint(ADDR_LUMIN));
-    int day, month, year;
-    calculateDate(&day, &month, &year);
-    char filename[15];
-    File dataFile;
-    bool fileOpened = false;
+void getData() {
+    bool lumin, isTemp, isHum, isPress;
+    EEPROM.get(ADDR_LUMIN, lumin);
+    EEPROM.get(ADDR_PRESSURE, isPress);
+    EEPROM.get(ADDR_TEMP_AIR, isTemp);
+    EEPROM.get(ADDR_HYGR, isHum);
+    //int day, month, year;
     unsigned long startTime;
-    int lightLevel;
+    unsigned short lightLevel;
     float voltage;
     String luminosityDescription;
-
-    while (!fileOpened) {
-        snprintf(filename, sizeof(filename), "%02d%02d%02d_%d.log", year, month, day, recordCounter);
-        if (SD.exists(filename)) {
-            dataFile = SD.open(filename, FILE_READ);
-            int fileSize = dataFile.size();
-            dataFile.close();
-            
-            if(fileSize <= (2048 - 100)) {
-                fileOpened = true;
-            } else {
-                recordCounter++;
-            }
-        } else {
-            fileOpened = true;
-        }
-    }
+    Serial.println("Get Data");
+    
     startTime = millis();
-    float temperature, humidity, pressure;
-    while ((millis() - startTime <= 3000)){
-        temperature = bme.readTemperature();
-        humidity = bme.readHumidity();
-        pressure = bme.readPressure();
+    short temperature, humidity;
+    float pressure;
+    unsigned short timeout;
+    EEPROM.get(ADDR_TIMEOUT_VALUE, timeout);
+     while ((millis() - startTime <=  timeout * 60000)){
+        temperature = isTemp ? bme.readTemperature() : NAN;
+        humidity = isHum ? bme.readHumidity() : NAN;
+        pressure = isPress ? bme.readPressure() : NAN;
         if(lumin){
             lightLevel = analogRead(LIGHT_SENSOR_PIN);
             voltage = lightLevel * (5.0/1023.0);
@@ -224,194 +172,169 @@ void saveDataToSD() {
             lightLevel = -1;
             voltage = NAN;
         }
-        int luminLow = readEEPROMint(ADDR_LUMIN_LOW);
-        int luminHigh = readEEPROMint(ADDR_LUMIN_HIGH);
+        unsigned short luminLow, luminHigh;
+        EEPROM.get(ADDR_LUMIN_LOW, luminHigh);
+        EEPROM.get(ADDR_LUMIN_HIGH, luminHigh);
         if (lightLevel < luminLow && lightLevel >= 0) {
-            luminosityDescription = F("faible");
+            luminosityDescription = "faible";
         } else if(lightLevel > luminHigh && lightLevel < 1000) {
-            luminosityDescription = F("forte");
+            luminosityDescription = "forte";
         }else {
             luminosityDescription = String(lightLevel);
         }
     }
     else {
-        luminosityDescription = F("Na");
+        luminosityDescription = "Na";
+    }
+    if(currentMode == MAINTENANCE){
+        Serial.print(isnan(temperature) ? "Na" : String(temperature)); Serial.print("C\n");
+        Serial.print(isnan(humidity) ? "Na" : String(humidity)); Serial.print("%\n");
+        Serial.print(isnan(pressure) ? "Na" : String(pressure)); Serial.print("Pa\n");
+        Serial.println(luminosityDescription);
     }
     
-
-    Serial.print(F("Temperature: ")); Serial.print(isnan(temperature) ? "Na" : String(temperature)); Serial.println("C");
-    Serial.print(F("Humidity: ")); Serial.print(isnan(humidity) ? "Na" : String(humidity)); Serial.println("%");
-    Serial.print(F("Pressure: ")); Serial.print(isnan(pressure) ? "Na" : String(pressure)); Serial.println("Pa");
-    Serial.print(F("Luminosity: ")); Serial.println(luminosityDescription);
-    dataFile = SD.open(filename, FILE_WRITE);
-    if (dataFile) {
-        dataFile.print(clock.now().hour()); dataFile.print(":"); dataFile.print(clock.now().minute()); dataFile.print(" -> ");
-        dataFile.print(F("Temperature: ")); dataFile.print(isnan(temperature) ? "Na" : String(temperature)); dataFile.print("C; ");
-        dataFile.print(F("Humidity: ")); dataFile.print(isnan(humidity) ? "Na" : String(humidity)); dataFile.print("%; ");
-        dataFile.print(F("Pressure: ")); dataFile.print(isnan(pressure) ? "Na" : String(pressure)); dataFile.print("Pa; ");
-        dataFile.print(F("Luminosity: ")); dataFile.println(luminosityDescription);
-        Serial.println(F("Data written"));
-        dataFile.close(); 
-    } else {
-        //Serial.print(F("error opening ")); Serial.println(filename);
+    if(currentMode != MAINTENANCE && currentMode != CONFIG){
+        DateTime now = clock.now();
+        byte day = now.day();
+        byte month = now.month();
+        byte year = now.year() % 100;
+        char filename[15];
+        File dataFile;
+        bool fileOpened = false;
+        while (!fileOpened) {
+            char filename[20]; // Assurez-vous que ceci est suffisamment grand pour le nom complet
+            itoa(year, filename, 10); // Convertir l'année en chaîne et la stocker dans filename
+            strcat(filename, "_"); // Ajouter un séparateur
+            itoa(month, filename + strlen(filename), 10); // Ajouter le mois à la suite
+            strcat(filename, "_"); // Ajouter un autre séparateur
+            itoa(day, filename + strlen(filename), 10); // Ajouter le jour à la suite
+            strcat(filename, "_"); // Ajouter un séparateur
+            itoa(recordCounter, filename + strlen(filename), 10); // Ajouter le compteur de fichiers à la suite
+            strcat(filename, ".log"); // Ajouter l'extension de fichier
+            //snprintf(filename, sizeof(filename), "%02d%02d%02d_%d.log", year, month, day, recordCounter);
+            if (SD.exists(filename)) {
+                dataFile = SD.open(filename, FILE_READ);
+                int fileSize = dataFile.size();
+                dataFile.close();
+                if(fileSize <= (2048 - 100)) {
+                    fileOpened = true;
+                } else {
+                    recordCounter++;
+                }
+            } else {
+                fileOpened = true;
+            }
+        }
+        dataFile = SD.open(filename, FILE_WRITE);
+        if (dataFile) {
+            dataFile.print(clock.now().hour()); dataFile.print(":"); dataFile.print(clock.now().minute()); dataFile.print(" -> ");
+            dataFile.print("Temperature: "); dataFile.print(isnan(temperature) ? "Na" : String(temperature)); dataFile.print("C; ");
+            dataFile.print("Humidity: "); dataFile.print(isnan(humidity) ? "Na" : String(humidity)); dataFile.print("%; ");
+            dataFile.print("Pressure: "); dataFile.print(isnan(pressure) ? "Na" : String(pressure)); dataFile.print("Pa; ");
+            dataFile.print("Luminosity: "); dataFile.println(luminosityDescription);
+            dataFile.close(); 
+        }
     }
 }
 
-void flashLedError(int red, int green, int blue, int duration1, int duration2) {
+void flashLedError(byte red, byte green, byte blue, int duration1, int duration2) {
     for (byte i = 0; i < 5; i++) {
         leds.setColorRGB(0, red, green, blue);  
         delay(duration1 * 500);  
-        leds.setColorRGB(0, 255, 0, 0);  // Rouge
+        leds.setColorRGB(0, 255, 0, 0);
         delay(duration2 * 500);
     }
-    leds.setColorRGB(0, 0, 0, 0);  // Éteindre la LED après la séquence
+    //leds.setColorRGB(0, 0, 0, 0);  // Éteindre la LED après la séquence
 }
 void changeMode(Mode newMode) {
-  currentMode = newMode;
-  switch (currentMode) {
+    currentMode = newMode;
+    switch (currentMode) {
     case CONFIG: leds.setColorRGB(0, 255, 110, 0); break;
     case STANDARD: leds.setColorRGB(0, 0, 255, 0); break;
     case ECO: leds.setColorRGB(0, 0, 0, 255); break;
     case MAINTENANCE: leds.setColorRGB(0, 255, 30, 0); break;
   }
 }
-void checkError() {
-    errorFlag = false;
-    if(!clock.begin()){
-        //Serial.println("Couldn't find RTC");
-        flashLedError(255, 0, 255, 1, 1);
-        errorFlag = true;
-    }
-    if(!SD.begin(4)){
-        flashLedError(255, 255, 255, 2, 1);
-        //Serial.println("Card failed or not present");
-        errorFlag = true;
-    }
-    if (!bme.begin(0x76)){
-        flashLedError(0,255,255,1,1);
-        //Serial.println("BME dont work chef");
-        errorFlag = true;
-    }
-    Serial.println(volume.blocksPerCluster()*volume.clusterCount() - volume.clusterCount() * 512);
-    //  if (SD.vol()->sectorsPerCluster() *512L * SD.vol()->freeClusterCount() < 7 * 1024 * 1024 * 1024){
-    //     Serial.println("Chef ya plus de place");
-    //     flashLedError(255,255,255,1,1);
-    //     errorFlag = true;
-    //  }
-
-    //if(!errorFlag)changeMode(currentMode);
-}
-void calculateDate(int* day, int* month, int* year) {
-    DateTime now = clock.now();
-    *day = now.day();
-    *month = now.month();
-    *year = now.year() % 100;
-}
-
-//gestion des commandes
-
 void handleSerialCommand(String command) {
     if (command.startsWith("LOG_INTERVAL=")) {
-        writeEEPROMint(ADDR_LOG_INTERVAL_VALUE, command.substring(13).toInt());
-        //Serial.println("LOG_INTERVAL set to " + String(logInterval));
+        EEPROM.put(ADDR_LOG_INTERVAL_VALUE, command.substring(13).toInt());
     }
     else if (command.startsWith("FILE_MAX_SIZE=")) {
-        writeEEPROMint(ADDR_FILE_MAX_SIZE_VALUE, command.substring(13).toInt());
-        //Serial.println("FILE_MAX_SIZE set to " + String(fileSize));
+        EEPROM.put(ADDR_FILE_MAX_SIZE_VALUE, command.substring(13).toInt());
     }
     else if (command.startsWith("TIMEOUT=")) {
-        writeEEPROMint(ADDR_TIMEOUT_VALUE, command.substring(8).toInt());
-        //Serial.println("TIMEOUT set to " + String(timeout));
+        EEPROM.put(ADDR_TIMEOUT_VALUE, command.substring(8).toInt());
     }
     else if (command.startsWith("LUMIN=")){
-        writeEEPROMint(ADDR_LUMIN, command.substring(6).toInt() != 0);
+        EEPROM.put(ADDR_LUMIN, command.substring(6).toInt() != 0);
     }
     else if (command.startsWith("LUMIN_LOW=")){
-        writeEEPROMint(ADDR_LUMIN_LOW, command.substring(10).toInt());
-        //Serial.println("LUMIN_LOW set to " + String(lumin_low));
+        EEPROM.put(ADDR_LUMIN_LOW, command.substring(10).toInt());
     }
     else if (command.startsWith("LUMIN_HIGH=")){
-        writeEEPROMint(ADDR_LUMIN_HIGH, command.substring(11).toInt());
-        //Serial.println("LUMIN_HIGH set to " + String(lumin_high));
+        EEPROM.put(ADDR_LUMIN_HIGH, command.substring(11).toInt());
     }
     else if (command.startsWith("TEMP_AIR=")){
-        writeEEPROMint(ADDR_TEMP_AIR, command.substring(9).toInt() != 0);
+        EEPROM.put(ADDR_TEMP_AIR, command.substring(9).toInt() != 0);
     }
     else if (command.startsWith("MIN_TEMP_AIR=")){
-        writeEEPROMint(ADDR_MIN_TEMP_AIR, command.substring(13).toInt());
+        EEPROM.put(ADDR_MIN_TEMP_AIR, command.substring(13).toInt());
     }
     else if (command.startsWith("MAX_TEMP_AIR=")){
-        writeEEPROMint(ADDR_MAX_TEMP_AIR, command.substring(13).toInt());
+        EEPROM.put(ADDR_MAX_TEMP_AIR, command.substring(13).toInt());
     }
     else if (command.startsWith("HYGR=")){
-        writeEEPROMint(ADDR_HYGR,command.substring(5).toInt() !=0);
+        EEPROM.put(ADDR_HYGR,command.substring(5).toInt() !=0);
     }
     else if (command.startsWith("HYGR_MINT=")){
-        writeEEPROMint(ADDR_HYGR_MINT, command.substring(9).toInt());
+        EEPROM.put(ADDR_HYGR_MINT, command.substring(9).toInt());
     }
     else if(command.startsWith("HYGR_MAXT=")){
-        writeEEPROMint(ADDR_HYGR_MAXT, command.substring(9).toInt());
+        EEPROM.put(ADDR_HYGR_MAXT, command.substring(9).toInt());
     }
     else if (command.startsWith("PRESSURE=")){
-        writeEEPROMint(ADDR_PRESSURE,command.substring(9).toInt()!=0);
+        EEPROM.put(ADDR_PRESSURE,command.substring(9).toInt()!=0);
     }
     else if (command.startsWith("PRESSURE_MIN=")){
-        writeEEPROMint(ADDR_PRESSURE_MIN,command.substring(13).toInt());
+        EEPROM.put(ADDR_PRESSURE_MIN,command.substring(13).toInt());
     }
     else if (command.startsWith("PRESSURE_MAX=")){
-        writeEEPROMint(ADDR_PRESSURE_MAX, command.substring(13).toInt());
+        EEPROM.put(ADDR_PRESSURE_MAX, command.substring(13).toInt());
     }
    else if (command.startsWith("CLOCK=")){
-    int currentDay,currentMonth,currentYear;
-    calculateDate(&currentDay, &currentMonth, &currentYear);
-    clock.adjust(DateTime(currentYear + 2000, currentMonth, currentDay,command.substring(6, 8).toInt(), command.substring(9, 11).toInt(), command.substring(12, 14).toInt()));
+        DateTime now = clock.now();
+        clock.adjust(DateTime(now.year(), now.month(), now.day(),command.substring(6, 8).toInt(), command.substring(9, 11).toInt(), command.substring(12, 14).toInt()));
     }
     else if (command.startsWith("DATE=")){
         DateTime now = clock.now();
         clock.adjust(DateTime(command.substring(9, 13).toInt(), command.substring(6, 8).toInt(), command.substring(3, 5).toInt(),now.hour(), now.minute(), now.second()));
     }
     else if (command == "RESET") {
-        resetToDefaults();
-        //Serial.println("All parameters reset to default values.");
+        initializeEEPROMDefaults();
     }
     else if (command == "VERSION") {
-        Serial.println("Version: 1.0.0, Lot: 12345");
+        Serial.println("1.0 , 1");
     }
     else {
-        Serial.println("Unknown command.");
+        Serial.println("Unknown");
     }
 }
+
 //gestion EEPROM
-void resetToDefaults() {
-    writeEEPROMint(ADDR_LOG_INTERVAL_VALUE, 10);
-    writeEEPROMint(ADDR_FILE_MAX_SIZE_VALUE, 4096);
-    writeEEPROMint(ADDR_TIMEOUT_VALUE, 30);
-}
-
-
-void writeEEPROMint(int address, int value) {
-    EEPROM.put(address, value);
-}
-
-int readEEPROMint(int address) {
-    int value;
-    EEPROM.get(address, value);
-    return value;
-}
 void initializeEEPROMDefaults() {
-    writeEEPROMint(ADDR_LUMIN, 1);
-    writeEEPROMint(ADDR_LUMIN_LOW, 200);
-    writeEEPROMint(ADDR_LUMIN_HIGH, 700);
-    writeEEPROMint(ADDR_TEMP_AIR, 1);
-    writeEEPROMint(ADDR_MIN_TEMP_AIR, -10);
-    writeEEPROMint(ADDR_MAX_TEMP_AIR, 60);
-    writeEEPROMint(ADDR_HYGR, 1);
-    writeEEPROMint(ADDR_HYGR_MINT, 0);
-    writeEEPROMint(ADDR_HYGR_MAXT, 50);
-    writeEEPROMint(ADDR_PRESSURE, 1);
-    writeEEPROMint(ADDR_PRESSURE_MIN, 850);
-    writeEEPROMint(ADDR_PRESSURE_MAX, 1080);
-    writeEEPROMint(ADDR_LOG_INTERVAL_VALUE, 10);
-    writeEEPROMint(ADDR_FILE_MAX_SIZE_VALUE, 4096);
-    writeEEPROMint(ADDR_TIMEOUT_VALUE, 30);
+    EEPROM.put(ADDR_LUMIN, 1);
+    EEPROM.put(ADDR_LUMIN_LOW, 255);
+    EEPROM.put(ADDR_LUMIN_HIGH, 768);
+    EEPROM.put(ADDR_TEMP_AIR, 1);
+    EEPROM.put(ADDR_MIN_TEMP_AIR, -10);
+    EEPROM.put(ADDR_MAX_TEMP_AIR, 60);
+    EEPROM.put(ADDR_HYGR, 1);
+    EEPROM.put(ADDR_HYGR_MINT, 0);
+    EEPROM.put(ADDR_HYGR_MAXT, 50);
+    EEPROM.put(ADDR_PRESSURE, 1);
+    EEPROM.put(ADDR_PRESSURE_MIN, 850);
+    EEPROM.put(ADDR_PRESSURE_MAX, 1080);
+    EEPROM.put(ADDR_LOG_INTERVAL_VALUE, 10);
+    EEPROM.put(ADDR_FILE_MAX_SIZE_VALUE, 4096);
+    EEPROM.put(ADDR_TIMEOUT_VALUE, 30);
 }
